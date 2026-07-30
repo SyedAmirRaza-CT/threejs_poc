@@ -68,6 +68,7 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
           ),
           if (_animations.isNotEmpty)
             Container(
+              height: 200, // Fixed height for the control area
               padding: const EdgeInsets.all(16),
               color: Colors.white,
               child: Column(
@@ -78,27 +79,30 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                   const SizedBox(height: 8),
-                  ..._animations.take(3).map((anim) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(anim.name, style: const TextStyle(fontSize: 12)),
-                        Slider(
-                          value: _animationProgress[anim.name] ?? 0.0,
-                          onChanged: (value) {
-                            setState(() {
-                              _animationProgress[anim.name] = value;
-                              _isPlaying = false; // Pause when manually scrubbing
-                            });
-                            _controller.setAnimationProgress(anim.name, value);
-                          },
-                        ),
-                      ],
-                    );
-                  }).toList(),
-                  if (_animations.length > 3)
-                    Text("+ ${_animations.length - 3} more animations available", 
-                      style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: _animations.length,
+                      itemBuilder: (context, index) {
+                        final anim = _animations[index];
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(anim.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                            Slider(
+                              value: _animationProgress[anim.name] ?? 0.0,
+                              onChanged: (value) {
+                                setState(() {
+                                  _animationProgress[anim.name] = value;
+                                  _isPlaying = false;
+                                });
+                                _controller.setAnimationProgress(anim.name, value);
+                              },
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
                 ],
               ),
             ),
