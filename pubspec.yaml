@@ -43,8 +43,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/animation/girl.glb
-    - assets/animation/Fox.glb
+    - assets/animation/
     - assets/index.html
 
   # An image asset can refer to one or more resolution-specific "variants", see

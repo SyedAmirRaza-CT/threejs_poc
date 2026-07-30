@@ -41,6 +41,16 @@ class DashboardPage extends StatelessWidget {
               zoom: 1.0,
               autoPlay: true, // Start fox playing
             ),
+            const SizedBox(height: 20),
+            _buildModelCard(
+              context,
+              title: 'Blood Vessel 2',
+              icon: Icons.biotech,
+              color: Colors.redAccent,
+              path: 'assets/animation/blood_vesel.glb',
+              zoom: 1.0,
+              autoPlay: true,
+            ),
           ],
         ),
       ),
