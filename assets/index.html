@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Three.js Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            -webkit-user-select: none; /* Disable text selection */
+            -webkit-touch-callout: none; /* Disable callout (copy/paste menu) */
+            user-select: none;
+        }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #333;
+            font-family: sans-serif;
+            text-align: center;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(0, 0, 0, 0.1);
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #loading-text {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div class="spinner"></div>
+        <p id="loading-text">Loading Model...</p>
+    </div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        let scene, camera, renderer, controls, currentModel;
+        let mixer, clock;
+        let isLoading = false;
+        let lastLoadedPath = "";
+
+        const loader = new GLTFLoader();
+
+        init();
+        animate();
+
+        function init() {
+            clock = new THREE.Clock();
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf0f0f0);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 5000);
+            camera.position.set(0, 1.6, 5);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+            document.body.appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 2);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
+            directionalLight.position.set(5, 10, 7.5);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.bias = -0.001; // Small bias to prevent shadow artifacts
+            scene.add(directionalLight);
+
+            window.addEventListener('resize', onWindowResize, false);
+
+            window.loadModelWithConfig = function(modelPath, bgColor, initialZoom, enableZoom, autoPlay) {
+                // Prevent duplicate loading of the same model
+                if (isLoading || lastLoadedPath === modelPath) return;
+
+                console.log("JS: Loading " + modelPath + " autoPlay: " + autoPlay);
+                isLoading = true;
+                lastLoadedPath = modelPath;
+
+                if (bgColor) {
+                    scene.background = new THREE.Color(bgColor);
+                    document.body.style.backgroundColor = bgColor;
+                }
+
+                if (enableZoom !== undefined) {
+                    controls.enableZoom = enableZoom;
+                }
+
+                // Clean up previous model
+                if (currentModel) {
+                    scene.remove(currentModel);
+                    currentModel.traverse(child => {
+                        if (child.isMesh) {
+                            child.geometry.dispose();
+                            if (child.material.map) child.material.map.dispose();
+                            child.material.dispose();
+                        }
+                    });
+                }
+                if (mixer) {
+                    mixer.stopAllAction();
+                    mixer = null;
+                }
+
+                document.getElementById('loading').style.display = 'flex';
+                document.getElementById('loading-text').innerText = "Loading Model...";
+
+                loader.load(modelPath, function (gltf) {
+                    console.log("JS: Loaded " + modelPath);
+                    currentModel = gltf.scene;
+
+                    // Fix for double-head/skinning issues: ensure the model is properly prepared
+                    currentModel.traverse(function (object) {
+                        if (object.isMesh) {
+                            object.castShadow = true;
+                            // object.receiveShadow = true; // Disable self-shadowing to prevent "patterns" (shadow acne)
+                            if (object.isSkinnedMesh) {
+                                object.frustumCulled = false;
+                            }
+                        }
+                    });
+
+                    scene.add(currentModel);
+                    document.getElementById('loading').style.display = 'none';
+                    isLoading = false;
+
+                    // Setup Animations
+                    if (gltf.animations && gltf.animations.length > 0) {
+                        mixer = new THREE.AnimationMixer(currentModel);
+                        // Play the first animation (for Fox, this is usually "Survey")
+                        const action = mixer.clipAction(gltf.animations[0]);
+
+                        if (autoPlay) {
+                            action.play();
+                        } else {
+                            action.play();
+                            mixer.timeScale = 0; // Start paused if autoPlay is false
+                        }
+
+                        if (window.flutter_inappwebview) {
+                            window.flutter_inappwebview.callHandler('onAnimationsAvailable', true);
+                        }
+                    } else {
+                        if (window.flutter_inappwebview) {
+                            window.flutter_inappwebview.callHandler('onAnimationsAvailable', false);
+                        }
+                    }
+
+                    // Framing logic
+                    const box = new THREE.Box3().setFromObject(currentModel);
+                    const size = box.getSize(new THREE.Vector3());
+                    const center = box.getCenter(new THREE.Vector3());
+                    const maxSize = Math.max(size.x, size.y, size.z);
+                    const fitHeightDistance = maxSize / (2 * Math.atan(Math.PI * camera.fov / 360));
+                    const fitWidthDistance = fitHeightDistance / camera.aspect;
+                    const zoomFactor = (initialZoom || 1.0);
+                    const distance = (1.2 / zoomFactor) * Math.max(fitHeightDistance, fitWidthDistance);
+
+                    camera.near = 0.01;
+                    camera.far = 5000;
+                    camera.updateProjectionMatrix();
+
+                    camera.position.copy(center);
+                    camera.position.z += distance;
+                    camera.lookAt(center);
+
+                    controls.maxDistance = distance * 10;
+                    controls.target.copy(center);
+                    controls.update();
+
+                }, (xhr) => {
+                    if (xhr.lengthComputable) {
+                        const percent = Math.round(xhr.loaded / xhr.total * 100);
+                        document.getElementById('loading-text').innerText = "Loading: " + percent + "%";
+                    }
+                }, (error) => {
+                    console.error('JS Load Error:', error);
+                    isLoading = false;
+                    lastLoadedPath = "";
+                    document.getElementById('loading-text').innerText = "Error: " + modelPath;
+                });
+            };
+
+            window.toggleAnimation = function(play) {
+                if (!mixer) return;
+                mixer.timeScale = play ? 1 : 0;
+            };
+
+            if (window.flutter_inappwebview) {
+                window.flutter_inappwebview.callHandler('onViewerReady');
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            if (mixer) mixer.update(delta);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>

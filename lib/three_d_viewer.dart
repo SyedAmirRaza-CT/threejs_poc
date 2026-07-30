@@ -1,0 +1,128 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+
+class ThreeDViewerController {
+  _ThreeDViewerState? _state;
+
+  void toggleAnimation(bool play) {
+    _state?._toggleAnimation(play);
+  }
+}
+
+class ThreeDViewer extends StatefulWidget {
+  final String assetPath;
+  final Color backgroundColor;
+  final double initialZoom;
+  final bool enableZoom;
+  final bool autoPlay;
+  final ThreeDViewerController? controller;
+  final Function(bool hasAnimations)? onAnimationsLoaded;
+
+  const ThreeDViewer({
+    super.key,
+    required this.assetPath,
+    this.backgroundColor = const Color(0xFFF0F0F0),
+    this.initialZoom = 1.0,
+    this.enableZoom = true,
+    this.autoPlay = true,
+    this.controller,
+    this.onAnimationsLoaded,
+  });
+
+  @override
+  State<ThreeDViewer> createState() => _ThreeDViewerState();
+}
+
+class _ThreeDViewerState extends State<ThreeDViewer> {
+  InAppWebViewController? webViewController;
+  static InAppLocalhostServer? _localhostServer;
+  bool isServerRunning = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller?._state = this;
+    _startServer();
+  }
+
+  Future<void> _startServer() async {
+    if (_localhostServer == null) {
+      _localhostServer = InAppLocalhostServer(port: 8080);
+      await _localhostServer!.start();
+    }
+    if (mounted) {
+      setState(() {
+        isServerRunning = true;
+      });
+    }
+  }
+
+  void _toggleAnimation(bool play) {
+    webViewController?.evaluateJavascript(
+      source: "window.toggleAnimation($play);",
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isServerRunning) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return InAppWebView(
+      initialUrlRequest: URLRequest(
+        url: WebUri("http://127.0.0.1:8080/assets/index.html"),
+      ),
+      initialSettings: InAppWebViewSettings(
+        allowFileAccessFromFileURLs: true,
+        allowUniversalAccessFromFileURLs: true,
+        javaScriptEnabled: true,
+        transparentBackground: true,
+        useWideViewPort: true,
+        loadWithOverviewMode: true,
+        supportZoom: false,
+        cacheEnabled: false,
+        disableContextMenu: true, // Disable context menu (long press)
+        selectionGranularity: SelectionGranularity.CHARACTER,
+      ),
+      onWebViewCreated: (controller) {
+        webViewController = controller;
+        controller.addJavaScriptHandler(
+          handlerName: 'onViewerReady',
+          callback: (args) {
+            _sendModelData();
+          },
+        );
+        controller.addJavaScriptHandler(
+          handlerName: 'onAnimationsAvailable',
+          callback: (args) {
+            bool hasAnimations = args[0] as bool;
+            widget.onAnimationsLoaded?.call(hasAnimations);
+          },
+        );
+      },
+      onConsoleMessage: (controller, consoleMessage) {
+        debugPrint("3D JS: ${consoleMessage.message}");
+      },
+      onLoadStop: (controller, url) {
+        _sendModelData();
+      },
+    );
+  }
+
+  void _sendModelData() {
+    if (webViewController == null) return;
+
+    String path = widget.assetPath;
+    if (!path.startsWith('/')) {
+      path = "/$path";
+    }
+
+    String hexColor = '#${widget.backgroundColor.value.toRadixString(16).substring(2)}';
+    
+    webViewController?.evaluateJavascript(
+      source: "if(window.loadModelWithConfig) window.loadModelWithConfig('$path', '$hexColor', ${widget.initialZoom}, ${widget.enableZoom}, ${widget.autoPlay});",
+    );
+  }
+}
