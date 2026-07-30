@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
@@ -151,11 +150,21 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
     if (webViewController == null) return;
 
     String path = widget.assetPath;
-    if (!path.startsWith('/')) {
-      path = "/$path";
+    
+    // Check if the path is a remote URL or a local asset
+    final bool isRemote = path.startsWith('http://') || path.startsWith('https://');
+    
+    if (!isRemote) {
+      // It's a local asset, route it through the localhost server
+      if (!path.startsWith('/')) {
+        path = "/$path";
+      }
+      path = "http://127.0.0.1:8080$path";
     }
 
-    String hexColor = '#${widget.backgroundColor.value.toRadixString(16).substring(2)}';
+    String hexColor = '#${widget.backgroundColor.toARGB32().toRadixString(16).substring(2)}';
+    
+    debugPrint("3D Viewer loading: $path");
     
     webViewController?.evaluateJavascript(
       source: "if(window.loadModelWithConfig) window.loadModelWithConfig('$path', '$hexColor', ${widget.initialZoom}, ${widget.enableZoom}, ${widget.autoPlay});",
