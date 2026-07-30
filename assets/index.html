@@ -9,8 +9,8 @@
             margin: 0;
             overflow: hidden;
             background-color: #f0f0f0;
-            -webkit-user-select: none; /* Disable text selection */
-            -webkit-touch-callout: none; /* Disable callout (copy/paste menu) */
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
             user-select: none;
         }
         canvas { display: block; width: 100vw; height: 100vh; }
@@ -69,6 +69,7 @@
 
         let scene, camera, renderer, controls, currentModel;
         let mixer, clock;
+        let actions = {};
         let isLoading = false;
         let lastLoadedPath = "";
 
@@ -103,13 +104,12 @@
             const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
             directionalLight.position.set(5, 10, 7.5);
             directionalLight.castShadow = true;
-            directionalLight.shadow.bias = -0.001; // Small bias to prevent shadow artifacts
+            directionalLight.shadow.bias = -0.001;
             scene.add(directionalLight);
 
             window.addEventListener('resize', onWindowResize, false);
 
             window.loadModelWithConfig = function(modelPath, bgColor, initialZoom, enableZoom, autoPlay) {
-                // Prevent duplicate loading of the same model
                 if (isLoading || lastLoadedPath === modelPath) return;
 
                 console.log("JS: Loading " + modelPath + " autoPlay: " + autoPlay);
@@ -125,7 +125,6 @@
                     controls.enableZoom = enableZoom;
                 }
 
-                // Clean up previous model
                 if (currentModel) {
                     scene.remove(currentModel);
                     currentModel.traverse(child => {
@@ -139,6 +138,7 @@
                 if (mixer) {
                     mixer.stopAllAction();
                     mixer = null;
+                    actions = {};
                 }
 
                 document.getElementById('loading').style.display = 'flex';
@@ -148,11 +148,9 @@
                     console.log("JS: Loaded " + modelPath);
                     currentModel = gltf.scene;
 
-                    // Fix for double-head/skinning issues: ensure the model is properly prepared
                     currentModel.traverse(function (object) {
                         if (object.isMesh) {
                             object.castShadow = true;
-                            // object.receiveShadow = true; // Disable self-shadowing to prevent "patterns" (shadow acne)
                             if (object.isSkinnedMesh) {
                                 object.frustumCulled = false;
                             }
@@ -166,22 +164,29 @@
                     // Setup Animations
                     if (gltf.animations && gltf.animations.length > 0) {
                         mixer = new THREE.AnimationMixer(currentModel);
-                        // Play the first animation (for Fox, this is usually "Survey")
-                        const action = mixer.clipAction(gltf.animations[0]);
+                        actions = {};
 
-                        if (autoPlay) {
+                        const animationList = gltf.animations.map(clip => {
+                            const action = mixer.clipAction(clip);
+                            actions[clip.name] = action;
                             action.play();
-                        } else {
-                            action.play();
-                            mixer.timeScale = 0; // Start paused if autoPlay is false
-                        }
+
+                            if (!autoPlay) {
+                                action.paused = true;
+                            }
+
+                            return {
+                                name: clip.name,
+                                duration: clip.duration
+                            };
+                        });
 
                         if (window.flutter_inappwebview) {
-                            window.flutter_inappwebview.callHandler('onAnimationsAvailable', true);
+                            window.flutter_inappwebview.callHandler('onAnimationsLoaded', animationList);
                         }
                     } else {
                         if (window.flutter_inappwebview) {
-                            window.flutter_inappwebview.callHandler('onAnimationsAvailable', false);
+                            window.flutter_inappwebview.callHandler('onAnimationsLoaded', []);
                         }
                     }
 
@@ -222,7 +227,28 @@
 
             window.toggleAnimation = function(play) {
                 if (!mixer) return;
-                mixer.timeScale = play ? 1 : 0;
+                for (let key in actions) {
+                    actions[key].paused = !play;
+                }
+            };
+
+            window.setAnimationProgress = function(name, progress) {
+                if (actions[name]) {
+                    const action = actions[name];
+                    const clip = action.getClip();
+                    action.paused = true; // Pause to control manually
+                    action.time = clip.duration * progress;
+                    mixer.update(0);
+                }
+            };
+
+            window.setAnimationTime = function(name, time) {
+                if (actions[name]) {
+                    const action = actions[name];
+                    action.paused = true;
+                    action.time = time;
+                    mixer.update(0);
+                }
             };
 
             if (window.flutter_inappwebview) {
@@ -239,7 +265,9 @@
         function animate() {
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
-            if (mixer) mixer.update(delta);
+            if (mixer) {
+                mixer.update(delta);
+            }
             controls.update();
             renderer.render(scene, camera);
         }

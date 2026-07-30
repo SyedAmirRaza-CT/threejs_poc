@@ -49,7 +49,7 @@ class DashboardPage extends StatelessWidget {
               color: Colors.redAccent,
               path: 'assets/animation/blood_vesel.glb',
               zoom: 1.0,
-              autoPlay: true,
+              autoPlay: false,
             ),
           ],
         ),

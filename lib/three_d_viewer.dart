@@ -2,11 +2,33 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
+class ThreeDAnimation {
+  final String name;
+  final double duration;
+
+  ThreeDAnimation({required this.name, required this.duration});
+
+  factory ThreeDAnimation.fromMap(Map map) {
+    return ThreeDAnimation(
+      name: map['name'] as String,
+      duration: (map['duration'] as num).toDouble(),
+    );
+  }
+}
+
 class ThreeDViewerController {
   _ThreeDViewerState? _state;
 
   void toggleAnimation(bool play) {
     _state?._toggleAnimation(play);
+  }
+
+  void setAnimationProgress(String name, double progress) {
+    _state?._setAnimationProgress(name, progress);
+  }
+
+  void setAnimationTime(String name, double time) {
+    _state?._setAnimationTime(name, time);
   }
 }
 
@@ -17,7 +39,7 @@ class ThreeDViewer extends StatefulWidget {
   final bool enableZoom;
   final bool autoPlay;
   final ThreeDViewerController? controller;
-  final Function(bool hasAnimations)? onAnimationsLoaded;
+  final Function(List<ThreeDAnimation> animations)? onAnimationsLoaded;
 
   const ThreeDViewer({
     super.key,
@@ -64,6 +86,18 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
     );
   }
 
+  void _setAnimationProgress(String name, double progress) {
+    webViewController?.evaluateJavascript(
+      source: "window.setAnimationProgress('$name', $progress);",
+    );
+  }
+
+  void _setAnimationTime(String name, double time) {
+    webViewController?.evaluateJavascript(
+      source: "window.setAnimationTime('$name', $time);",
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!isServerRunning) {
@@ -83,8 +117,7 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
         loadWithOverviewMode: true,
         supportZoom: false,
         cacheEnabled: false,
-        disableContextMenu: true, // Disable context menu (long press)
-        selectionGranularity: SelectionGranularity.CHARACTER,
+        disableContextMenu: true,
       ),
       onWebViewCreated: (controller) {
         webViewController = controller;
@@ -95,10 +128,13 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
           },
         );
         controller.addJavaScriptHandler(
-          handlerName: 'onAnimationsAvailable',
+          handlerName: 'onAnimationsLoaded',
           callback: (args) {
-            bool hasAnimations = args[0] as bool;
-            widget.onAnimationsLoaded?.call(hasAnimations);
+            final List<dynamic> anims = args[0] as List<dynamic>;
+            final List<ThreeDAnimation> animations = anims
+                .map((e) => ThreeDAnimation.fromMap(e as Map<dynamic, dynamic>))
+                .toList();
+            widget.onAnimationsLoaded?.call(animations);
           },
         );
       },
