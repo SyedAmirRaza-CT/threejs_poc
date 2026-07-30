@@ -58,7 +58,7 @@ class DashboardPage extends StatelessWidget {
               icon: Icons.psychology,
               color: Colors.blueGrey,
               path: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BrainStem/glTF-Binary/BrainStem.glb',
-              zoom: 1.0,
+              zoom: 1.2,
               autoPlay: true,
             ),
           ],
@@ -100,7 +100,7 @@ class DashboardPage extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(15),
             gradient: LinearGradient(
-              colors: [color.withOpacity(0.7), color],
+              colors: [color.withValues(alpha: 0.7), color],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),

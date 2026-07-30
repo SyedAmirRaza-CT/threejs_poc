@@ -56,6 +56,13 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
               backgroundColor: Colors.white,
               initialZoom: widget.initialZoom,
               autoPlay: widget.autoPlay,
+              // Add a custom Flutter loader
+              customLoader: Container(
+                color: Colors.white,
+                child: const Center(
+                  child: CircularProgressIndicator(),
+                ),
+              ),
               onAnimationsLoaded: (animations) {
                 setState(() {
                   _animations = animations;
@@ -68,7 +75,7 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
           ),
           if (_animations.isNotEmpty)
             Container(
-              height: 200, // Fixed height for the control area
+              height: 200,
               padding: const EdgeInsets.all(16),
               color: Colors.white,
               child: Column(
