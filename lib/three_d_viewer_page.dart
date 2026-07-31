@@ -53,15 +53,11 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
             child: ThreeDViewer(
               controller: _controller,
               assetPath: widget.modelPath,
-              backgroundColor: Colors.white,
+              backgroundColor: Colors.transparent,
               initialZoom: widget.initialZoom,
               autoPlay: widget.autoPlay,
-              // Add a custom Flutter loader
-              customLoader: Container(
-                color: Colors.white,
-                child: const Center(
-                  child: CircularProgressIndicator(),
-                ),
+              customLoader: const Center(
+                child: CircularProgressIndicator(),
               ),
               onAnimationsLoaded: (animations) {
                 setState(() {
@@ -94,7 +90,9 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(anim.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                            Text(anim.name,
+                                style: const TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.w500)),
                             Slider(
                               value: _animationProgress[anim.name] ?? 0.0,
                               onChanged: (value) {
@@ -102,7 +100,8 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                                   _animationProgress[anim.name] = value;
                                   _isPlaying = false;
                                 });
-                                _controller.setAnimationProgress(anim.name, value);
+                                _controller.setAnimationProgress(
+                                    anim.name, value);
                               },
                             ),
                           ],

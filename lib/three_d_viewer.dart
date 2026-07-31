@@ -187,7 +187,12 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
       path = "http://127.0.0.1:8080$path";
     }
 
-    String hexColor = '#${widget.backgroundColor.toARGB32().toRadixString(16).substring(2)}';
+    String hexColor;
+    if (widget.backgroundColor == Colors.transparent) {
+      hexColor = 'transparent';
+    } else {
+      hexColor = '#${widget.backgroundColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
+    }
     
     String cameraPosJs = "null";
     if (widget.initialCameraPosition != null && widget.initialCameraPosition!.length >= 3) {

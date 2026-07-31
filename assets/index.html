@@ -111,8 +111,15 @@
                 lastLoadedPath = modelPath;
 
                 if (bgColor) {
-                    scene.background = new THREE.Color(bgColor);
-                    document.body.style.backgroundColor = bgColor;
+                    if (bgColor === 'transparent' || bgColor === '#00000000') {
+                        scene.background = null;
+                        renderer.setClearColor(0x000000, 0);
+                        document.body.style.backgroundColor = 'transparent';
+                    } else {
+                        scene.background = new THREE.Color(bgColor);
+                        document.body.style.backgroundColor = bgColor;
+                        renderer.setClearColor(bgColor, 1);
+                    }
                 }
 
                 controls.enableZoom = (enableZoom !== undefined) ? enableZoom : true;
