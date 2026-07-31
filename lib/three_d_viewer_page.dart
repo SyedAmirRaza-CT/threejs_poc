@@ -5,12 +5,16 @@ class ThreeDViewerPage extends StatefulWidget {
   final String modelPath;
   final double initialZoom;
   final bool autoPlay;
+  final List<double>? initialCameraPosition;
+  final List<double>? initialTargetPosition;
 
   const ThreeDViewerPage({
     super.key,
     required this.modelPath,
     this.initialZoom = 1.0,
     this.autoPlay = true,
+    this.initialCameraPosition,
+    this.initialTargetPosition,
   });
 
   @override
@@ -59,6 +63,8 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                   backgroundColor: Colors.transparent,
                   initialZoom: widget.initialZoom,
                   autoPlay: widget.autoPlay,
+                  initialCameraPosition: widget.initialCameraPosition,
+                  initialTargetPosition: widget.initialTargetPosition,
                   customLoader: const Center(
                     child: CircularProgressIndicator(),
                   ),

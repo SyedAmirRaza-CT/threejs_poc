@@ -58,8 +58,10 @@ class DashboardPage extends StatelessWidget {
               icon: Icons.psychology,
               color: Colors.blueGrey,
               path: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BrainStem/glTF-Binary/BrainStem.glb',
-              zoom: 1.2,
+              zoom: 1,
               autoPlay: true,
+              cameraPosition: [5, 2, 1], // Angled view
+              targetPosition: [0, 1, 0], // Focus on the model's head
             ),
           ],
         ),
@@ -75,6 +77,8 @@ class DashboardPage extends StatelessWidget {
     required String path,
     double zoom = 1.0,
     bool autoPlay = true,
+    List<double>? cameraPosition,
+    List<double>? targetPosition,
   }) {
     return Card(
       elevation: 4,
@@ -90,6 +94,8 @@ class DashboardPage extends StatelessWidget {
                 modelPath: path,
                 initialZoom: zoom,
                 autoPlay: autoPlay,
+                initialCameraPosition: cameraPosition,
+                initialTargetPosition: targetPosition,
               ),
             ),
           );
