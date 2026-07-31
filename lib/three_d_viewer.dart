@@ -138,8 +138,37 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
       hexColor = '#${widget.backgroundColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
     }
 
-    // Passing config via Hash Fragment for instant startup
-    final String initialUrl = "http://127.0.0.1:8080/assets/web_viewer/index.html#$path|$hexColor|${widget.initialZoom}|${widget.autoPlay}|${widget.minZoom}|${widget.maxZoom}|${widget.enableBoundaries}|${widget.enableZoom}|${widget.enableRotate}|${widget.enablePan}";
+    // Pass whether we should show the native (JS-based) loader or use Flutter's
+    bool showNativeLoader = widget.customLoader == null;
+
+    String cameraPosStr = "null";
+    if (widget.initialCameraPosition != null && widget.initialCameraPosition!.length >= 3) {
+      cameraPosStr = widget.initialCameraPosition!.join(',');
+    }
+
+    String targetPosStr = "null";
+    if (widget.initialTargetPosition != null && widget.initialTargetPosition!.length >= 3) {
+      targetPosStr = widget.initialTargetPosition!.join(',');
+    }
+
+    // Passing config via Hash Fragment (13 parameters)
+    final String config = [
+      path,
+      hexColor,
+      widget.initialZoom.toString(),
+      widget.autoPlay.toString(),
+      widget.minZoom.toString(),
+      widget.maxZoom.toString(),
+      widget.enableBoundaries.toString(),
+      widget.enableZoom.toString(),
+      widget.enableRotate.toString(),
+      widget.enablePan.toString(),
+      showNativeLoader.toString(),
+      cameraPosStr,
+      targetPosStr,
+    ].join('|');
+
+    final String initialUrl = "http://127.0.0.1:8080/assets/web_viewer/index.html#${Uri.encodeComponent(config)}";
 
     return Stack(
       children: [
@@ -170,7 +199,24 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
             );
             controller.addJavaScriptHandler(
               handlerName: 'onLoadComplete',
-              callback: (args) => setState(() => isLoadingModel = false),
+              callback: (args) async {
+                debugPrint("3D Viewer: Load Complete");
+                // Wait for a small delay to ensure the browser has actually rendered the first frame
+                await Future.delayed(const Duration(milliseconds: 200));
+                if (mounted) {
+                  setState(() => isLoadingModel = false);
+                }
+              },
+            );
+            controller.addJavaScriptHandler(
+              handlerName: 'onLoadError',
+              callback: (args) {
+                debugPrint("3D Viewer Error: ${args[0]}");
+                if (mounted) {
+                  setState(() => isLoadingModel = false);
+                }
+                // You could show a snackbar or error widget here
+              },
             );
             controller.addJavaScriptHandler(
               handlerName: 'onAnimationsLoaded',
@@ -187,8 +233,17 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
             debugPrint("3D JS: ${consoleMessage.message}");
           },
         ),
-        if (isLoadingModel && widget.customLoader != null)
-          Positioned.fill(child: widget.customLoader!),
+        if (widget.customLoader != null)
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: !isLoadingModel,
+              child: AnimatedOpacity(
+                opacity: isLoadingModel ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 500),
+                child: widget.customLoader!,
+              ),
+            ),
+          ),
       ],
     );
   }

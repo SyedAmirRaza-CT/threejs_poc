@@ -24,7 +24,7 @@
             text-align: center;
             pointer-events: none;
             z-index: 10;
-            display: none; /* Hide by default, Flutter will handle custom loading */
+            display: none;
             flex-direction: column;
             align-items: center;
             justify-content: center;
@@ -69,245 +69,253 @@
         let lastLoadedPath = "";
         let enableBoundaries = true;
 
+        // Global Error Handling
+        window.onerror = function(message, source, lineno, colno, error) {
+            console.error("Global JS Error:", message);
+            if (window.flutter_inappwebview) {
+                window.flutter_inappwebview.callHandler('onLoadError', message);
+            }
+            return false;
+        };
+
         const loader = new GLTFLoader();
 
         init();
         animate();
 
         function init() {
-            // Parse data from URL hash (#path|color|zoom|autoplay|minZ|maxZ|boundaries|enableZoom|rotate|pan)
-            const hash = decodeURIComponent(window.location.hash.substring(1));
-            const parts = hash.split('|');
+            try {
+                // Parsing logic for Hash
+                const hash = window.location.hash.substring(1);
+                const decodedHash = decodeURIComponent(hash);
+                const parts = decodedHash.split('|');
 
-            const modelPath = parts[0];
-            const bgColor = parts[1];
-            const initialZoom = parseFloat(parts[2] || "1.0");
-            const autoPlay = parts[3] === 'true';
-            const minZoom = parseFloat(parts[4] || "0.5");
-            const maxZoom = parseFloat(parts[5] || "10.0");
-            const boundariesEnabled = parts[6] === 'true';
-            const zoomEnabled = parts[7] === 'true';
-            const rotateEnabled = parts[8] === 'true';
-            const panEnabled = parts[9] === 'true';
+                const modelPath = parts[0];
+                const bgColor = parts[1];
+                const initialZoom = parseFloat(parts[2] || "1.0");
+                const autoPlay = parts[3] === 'true';
+                const minZoom = parseFloat(parts[4] || "0.5");
+                const maxZoom = parseFloat(parts[5] || "10.0");
+                const boundEnabled = parts[6] === 'true';
+                const zoomEnabled = parts[7] === 'true';
+                const rotateEnabled = parts[8] === 'true';
+                const panEnabled = parts[9] === 'true';
+                const nativeLoaderEnabled = parts[10] === 'true';
+                const cameraPosStr = parts[11];
+                const targetPosStr = parts[12];
 
-            clock = new THREE.Clock();
-            scene = new THREE.Scene();
+                enableBoundaries = boundEnabled; // Update global state
 
-            if (bgColor) {
-                if (bgColor === 'transparent') {
+                let cameraPos = null;
+                if (cameraPosStr && cameraPosStr !== "null") {
+                    const c = cameraPosStr.split(',');
+                    cameraPos = { x: parseFloat(c[0]), y: parseFloat(c[1]), z: parseFloat(c[2]) };
+                }
+
+                let targetPos = null;
+                if (targetPosStr && targetPosStr !== "null") {
+                    const t = targetPosStr.split(',');
+                    targetPos = { x: parseFloat(t[0]), y: parseFloat(t[1]), z: parseFloat(t[2]) };
+                }
+
+                clock = new THREE.Clock();
+                scene = new THREE.Scene();
+
+                camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 5000);
+                camera.position.set(0, 1.6, 5);
+
+                renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(window.devicePixelRatio);
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+                document.body.appendChild(renderer.domElement);
+
+                controls = new OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+
+                const ambientLight = new THREE.AmbientLight(0xffffff, 2);
+                scene.add(ambientLight);
+
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
+                directionalLight.position.set(5, 10, 7.5);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.bias = -0.001;
+                scene.add(directionalLight);
+
+                window.addEventListener('resize', onWindowResize, false);
+
+                // Expose controller functions
+                window.loadModelWithConfig = function(p, bg, z, ze, pl, cp, tp, re, pe, nl, minz, maxz, be) {
+                    loadModel(p, bg, z, ze, pl, cp, tp, re, pe, nl, minz, maxz, be);
+                };
+
+                window.toggleAnimation = function(play) {
+                    if (!mixer) return;
+                    for (let key in actions) actions[key].paused = !play;
+                };
+
+                window.setAnimationProgress = function(name, progress) {
+                    if (actions[name]) {
+                        const action = actions[name];
+                        action.paused = true;
+                        action.time = action.getClip().duration * progress;
+                        mixer.update(0);
+                    }
+                };
+
+                // Start loading immediately
+                if (modelPath && modelPath !== "null" && modelPath !== "") {
+                    console.log("JS: Auto-loading " + modelPath + " with target " + JSON.stringify(targetPos));
+                    loadModel(modelPath, bgColor, initialZoom, zoomEnabled, autoPlay, cameraPos, targetPos, rotateEnabled, panEnabled, nativeLoaderEnabled, minZoom, maxZoom, boundEnabled);
+                }
+
+                if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onViewerReady');
+
+            } catch (e) {
+                console.error("Init Error:", e);
+            }
+        }
+
+        function loadModel(path, bg, zoom, ze, play, cp, tp, re, pe, nl, minz, maxz, be) {
+            if (isLoading || !path) return;
+
+            isLoading = true;
+            lastLoadedPath = path;
+            enableBoundaries = be !== false;
+
+            // Handle Background
+            if (bg) {
+                if (bg === 'transparent') {
                     scene.background = null;
+                    renderer.setClearColor(0x000000, 0);
                 } else {
-                    scene.background = new THREE.Color(bgColor);
+                    scene.background = new THREE.Color(bg);
+                    renderer.setClearColor(bg, 1);
                 }
             }
 
-            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 5000);
-            camera.position.set(0, 1.6, 5);
+            // Controls config
+            controls.enableZoom = ze !== false;
+            controls.enableRotate = re !== false;
+            controls.enablePan = pe !== false;
 
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-            if (bgColor === 'transparent') {
-                renderer.setClearColor(0x000000, 0);
-            } else if (bgColor) {
-                renderer.setClearColor(bgColor, 1);
+            if (currentModel) {
+                scene.remove(currentModel);
+                currentModel.traverse(child => {
+                    if (child.isMesh) {
+                        child.geometry.dispose();
+                        if (child.material.map) child.material.map.dispose();
+                        child.material.dispose();
+                    }
+                });
             }
 
-            document.body.appendChild(renderer.domElement);
+            if (mixer) {
+                mixer.stopAllAction();
+                mixer = null;
+                actions = {};
+            }
 
-            controls = new OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
-            controls.dampingFactor = 0.05;
-            controls.enableZoom = zoomEnabled;
-            controls.enableRotate = rotateEnabled;
-            controls.enablePan = panEnabled;
+            if (nl) {
+                document.getElementById('loading').style.display = 'flex';
+                document.getElementById('loading-text').innerText = "Loading...";
+            }
 
-            // Boundaries logic
-            controls.addEventListener('change', () => {
-                if (!currentModel || !enableBoundaries) return;
+            if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onLoadStart');
+
+            loader.load(path, function (gltf) {
+                currentModel = gltf.scene;
+                currentModel.traverse(function (object) {
+                    if (object.isMesh) {
+                        object.castShadow = true;
+                        if (object.isSkinnedMesh) object.frustumCulled = false;
+                    }
+                });
+
+                scene.add(currentModel);
+                document.getElementById('loading').style.display = 'none';
+                isLoading = false;
+
+                if (gltf.animations && gltf.animations.length > 0) {
+                    mixer = new THREE.AnimationMixer(currentModel);
+                    actions = {};
+                    const animationList = gltf.animations.map(clip => {
+                        const action = mixer.clipAction(clip);
+                        actions[clip.name] = action;
+                        action.play();
+                        if (!play) action.paused = true;
+                        return { name: clip.name, duration: clip.duration };
+                    });
+                    if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onAnimationsLoaded', animationList);
+                }
+
+                // Framing
                 const box = new THREE.Box3().setFromObject(currentModel);
                 const size = box.getSize(new THREE.Vector3());
                 const center = box.getCenter(new THREE.Vector3());
-                const limitX = size.x * 1.5;
-                const limitY = size.y * 1.5;
-                const limitZ = size.z * 1.5;
+
+                // Calculate distance to fit model
+                const fov = camera.fov * (Math.PI / 180);
+                const fitHeightDistance = size.y / (2 * Math.atan(fov / 2));
+                const fitWidthDistance = size.x / (2 * Math.atan(fov / 2) * camera.aspect);
+                const baseDistance = Math.max(fitHeightDistance, fitWidthDistance);
+
+                if (cp) {
+                    camera.position.set(cp.x, cp.y, cp.z);
+                } else {
+                    const zFactor = zoom || 1.0;
+                    camera.position.set(center.x, center.y, center.z + (baseDistance * 1.5 / zFactor));
+                }
+
+                if (tp) {
+                    controls.target.set(tp.x, tp.y, tp.z);
+                } else {
+                    controls.target.copy(center);
+                }
+
+                // Set zoom limits
+                controls.maxDistance = baseDistance * (4.0 / (minz || 0.5));
+                controls.minDistance = baseDistance * (0.01 / (maxz || 10.0));
+
+                camera.lookAt(controls.target);
+                controls.update();
+                renderer.render(scene, camera);
+
+                if (window.flutter_inappwebview) {
+                    requestAnimationFrame(() => {
+                        window.flutter_inappwebview.callHandler('onLoadComplete');
+                    });
+                }
+
+            }, (xhr) => {
+                if (xhr.lengthComputable && nl) {
+                    const percent = Math.round(xhr.loaded / xhr.total * 100);
+                    document.getElementById('loading-text').innerText = "Loading: " + percent + "%";
+                }
+            }, (error) => {
+                isLoading = false;
+                document.getElementById('loading').style.display = 'none';
+                if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onLoadError', error.toString());
+            });
+        }
+
+        // Add Boundaries Listener
+        function onAnimate() {
+            if (currentModel && enableBoundaries && controls) {
+                const box = new THREE.Box3().setFromObject(currentModel);
+                const size = box.getSize(new THREE.Vector3());
+                const center = box.getCenter(new THREE.Vector3());
+                const limitX = size.x * 2.0;
+                const limitY = size.y * 2.0;
+                const limitZ = size.z * 2.0;
                 controls.target.x = THREE.MathUtils.clamp(controls.target.x, center.x - limitX, center.x + limitX);
                 controls.target.y = THREE.MathUtils.clamp(controls.target.y, center.y - limitY, center.y + limitY);
                 controls.target.z = THREE.MathUtils.clamp(controls.target.z, center.z - limitZ, center.z + limitZ);
-            });
-
-            const ambientLight = new THREE.AmbientLight(0xffffff, 2);
-            scene.add(ambientLight);
-
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
-            directionalLight.position.set(5, 10, 7.5);
-            directionalLight.castShadow = true;
-            directionalLight.shadow.bias = -0.001;
-            scene.add(directionalLight);
-
-            window.addEventListener('resize', onWindowResize, false);
-
-            // Start loading immediately if path exists
-            if (modelPath) {
-                loadModelWithConfig(modelPath, bgColor, initialZoom, zoomEnabled, autoPlay, null, null, rotateEnabled, panEnabled, true, minZoom, maxZoom, boundariesEnabled);
             }
-
-            window.loadModelWithConfig = function(path, bg, zoom, zoomEnabled, play, camPos, targetPos, rotateEnabled, panEnabled, nativeLoader, minZ, maxZ, boundEnabled) {
-                if (isLoading || (lastLoadedPath === path && path !== "")) return;
-
-                isLoading = true;
-                lastLoadedPath = path;
-                enableBoundaries = (boundEnabled !== undefined) ? boundEnabled : true;
-
-                if (bg) {
-                    if (bg === 'transparent' || bg === '#00000000') {
-                        scene.background = null;
-                        renderer.setClearColor(0x000000, 0);
-                        document.body.style.backgroundColor = 'transparent';
-                    } else {
-                        scene.background = new THREE.Color(bg);
-                        document.body.style.backgroundColor = bg;
-                        renderer.setClearColor(bg, 1);
-                    }
-                }
-
-                controls.enableZoom = (zoomEnabled !== undefined) ? zoomEnabled : true;
-                controls.enableRotate = (rotateEnabled !== undefined) ? rotateEnabled : true;
-                controls.enablePan = (panEnabled !== undefined) ? panEnabled : true;
-
-                if (currentModel) {
-                    scene.remove(currentModel);
-                    currentModel.traverse(child => {
-                        if (child.isMesh) {
-                            child.geometry.dispose();
-                            if (child.material.map) child.material.map.dispose();
-                            child.material.dispose();
-                        }
-                    });
-                }
-                if (mixer) {
-                    mixer.stopAllAction();
-                    mixer = null;
-                    actions = {};
-                }
-
-                if (nativeLoader) {
-                    document.getElementById('loading').style.display = 'flex';
-                }
-
-                if (window.flutter_inappwebview) {
-                    window.flutter_inappwebview.callHandler('onLoadStart');
-                }
-
-                loader.load(path, function (gltf) {
-                    currentModel = gltf.scene;
-                    currentModel.traverse(function (object) {
-                        if (object.isMesh) {
-                            object.castShadow = true;
-                            if (object.isSkinnedMesh) object.frustumCulled = false;
-                        }
-                    });
-
-                    scene.add(currentModel);
-                    document.getElementById('loading').style.display = 'none';
-                    isLoading = false;
-
-                    if (gltf.animations && gltf.animations.length > 0) {
-                        mixer = new THREE.AnimationMixer(currentModel);
-                        const animationList = gltf.animations.map(clip => {
-                            const action = mixer.clipAction(clip);
-                            actions[clip.name] = action;
-                            action.play();
-                            if (!play) action.paused = true;
-                            return { name: clip.name, duration: clip.duration };
-                        });
-                        if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onAnimationsLoaded', animationList);
-                    }
-
-                    const box = new THREE.Box3().setFromObject(currentModel);
-                    const size = box.getSize(new THREE.Vector3());
-                    const center = box.getCenter(new THREE.Vector3());
-                    const maxSize = Math.max(size.x, size.y, size.z);
-
-                    // Base distance for framing
-                    const fitHeightDistance = maxSize / (2 * Math.atan(Math.PI * camera.fov / 360));
-                    const fitWidthDistance = fitHeightDistance / camera.aspect;
-                    const baseDistance = Math.max(fitHeightDistance, fitWidthDistance);
-
-                    if (camPos && camPos.x !== undefined) {
-                        camera.position.set(camPos.x, camPos.y, camPos.z);
-                    } else {
-                        const zoomFactor = (zoom || 1.0);
-                        const distance = (1.2 / zoomFactor) * baseDistance;
-                        camera.position.copy(center);
-                        camera.position.z += distance;
-                    }
-
-                    if (targetPos && targetPos.x !== undefined) {
-                        controls.target.set(targetPos.x, targetPos.y, targetPos.z);
-                    } else {
-                        controls.target.copy(center);
-                    }
-
-                    // Set zoom limits
-                    if (minZ !== undefined && minZ !== null) {
-                        controls.maxDistance = baseDistance * (2.0 / minZ);
-                    } else {
-                        controls.maxDistance = 5000;
-                    }
-
-                    if (maxZ !== undefined && maxZ !== null) {
-                        controls.minDistance = baseDistance * (0.1 / maxZ);
-                    } else {
-                        controls.minDistance = 0.01;
-                    }
-
-                    camera.lookAt(controls.target);
-                    controls.update();
-
-                    if (window.flutter_inappwebview) {
-                        window.flutter_inappwebview.callHandler('onLoadComplete');
-                    }
-
-                }, (xhr) => {
-                    if (xhr.lengthComputable) {
-                        const percent = Math.round(xhr.loaded / xhr.total * 100);
-                        if (nativeLoader) {
-                            document.getElementById('loading-text').innerText = "Loading: " + percent + "%";
-                        }
-                        if (window.flutter_inappwebview) {
-                            window.flutter_inappwebview.callHandler('onLoadProgress', percent);
-                        }
-                    }
-                }, (error) => {
-                    console.error('JS Load Error:', error);
-                    isLoading = false;
-                    lastLoadedPath = "";
-                    if (window.flutter_inappwebview) {
-                        window.flutter_inappwebview.callHandler('onLoadError', error.toString());
-                    }
-                });
-            };
-
-            window.toggleAnimation = function(play) {
-                if (!mixer) return;
-                for (let key in actions) actions[key].paused = !play;
-            };
-
-            window.setAnimationProgress = function(name, progress) {
-                if (actions[name]) {
-                    const action = actions[name];
-                    action.paused = true;
-                    action.time = action.getClip().duration * progress;
-                    mixer.update(0);
-                }
-            };
-
-            if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onViewerReady');
         }
 
         function onWindowResize() {
@@ -318,10 +326,13 @@
 
         function animate() {
             requestAnimationFrame(animate);
-            const delta = clock.getDelta();
+            const delta = clock ? clock.getDelta() : 0;
             if (mixer) mixer.update(delta);
-            controls.update();
-            renderer.render(scene, camera);
+            if (controls) {
+                onAnimate();
+                controls.update();
+            }
+            if (renderer && scene && camera) renderer.render(scene, camera);
         }
     </script>
 </body>
