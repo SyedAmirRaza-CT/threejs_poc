@@ -42,129 +42,18 @@
 
         const loader = new GLTFLoader();
 
-        // --- Helper Function (Top level to avoid ReferenceErrors) ---
-        const parseAngleDegrees = (value, defaultValue) => {
+        // Helper to parse degrees into radians
+        function parseAngleDegrees(value, defaultValue) {
             if (value === null || value === undefined || value === "" || value === "null") {
                 return defaultValue;
             }
             const degrees = Number(value);
             if (!Number.isFinite(degrees)) return defaultValue;
             return THREE.MathUtils.degToRad(degrees);
-        };
-
-        // --- Core Load Function ---
-        function loadModel(path, bg, zoom, play, minz, maxz, be, ze, re, pe, nl, cp, tp, minP, maxP, minA, maxA) {
-            if (isLoading || !path) return;
-            isLoading = true;
-            lastLoadedPath = path;
-            enableBoundaries = (be === true || be === 'true');
-
-            if (bg === 'transparent' || bg === '#00000000') {
-                scene.background = null;
-                renderer.setClearColor(0x000000, 0);
-            } else {
-                scene.background = new THREE.Color(bg || '#f0f0f0');
-                renderer.setClearColor(scene.background, 1);
-            }
-
-            // Apply interaction settings
-            controls.enableZoom = ze === true || ze === 'true';
-            controls.enableRotate = re === true || re === 'true';
-            controls.enablePan = pe === true || pe === 'true';
-
-            if (currentModel) scene.remove(currentModel);
-            if (mixer) { mixer.stopAllAction(); mixer = null; }
-            actions = {};
-
-            if (nl === true || nl === 'true') document.getElementById('loading').style.display = 'flex';
-            if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onLoadStart');
-
-            loader.load(path, (gltf) => {
-                currentModel = gltf.scene;
-                currentModel.traverse(o => { if(o.isMesh) { o.castShadow = true; if(o.isSkinnedMesh) o.frustumCulled = false; } });
-                scene.add(currentModel);
-
-                if (gltf.animations && gltf.animations.length > 0) {
-                    mixer = new THREE.AnimationMixer(currentModel);
-                    const list = gltf.animations.map(c => {
-                        const a = mixer.clipAction(c); actions[c.name] = a; a.play();
-                        if (play === false || play === 'false') a.paused = true;
-                        return { name: c.name, duration: c.duration };
-                    });
-                    if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onAnimationsLoaded', list);
-                }
-
-                const box = new THREE.Box3().setFromObject(currentModel);
-                initCenter = box.getCenter(new THREE.Vector3());
-                initSize = box.getSize(new THREE.Vector3());
-                const maxSize = Math.max(initSize.x, initSize.y, initSize.z);
-                const baseDist = maxSize / (2 * Math.atan(camera.fov * Math.PI / 360));
-
-                if (tp && tp !== "null") {
-                    const t = tp.split(','); controls.target.set(parseFloat(t[0]), parseFloat(t[1]), parseFloat(t[2]));
-                } else {
-                    controls.target.copy(initCenter);
-                }
-
-                const zVal = parseFloat(zoom) || 1.0;
-                if (cp && cp !== "null") {
-                    const c = cp.split(','); camera.position.set(parseFloat(c[0]), parseFloat(c[1]), parseFloat(c[2]));
-                } else {
-                    camera.position.set(initCenter.x, initCenter.y, initCenter.z + (baseDist * 1.5 / zVal));
-                }
-
-                // --- Apply Rotation Limits ---
-                controls.update();
-
-                // Robust degree-to-radian conversion
-                controls.minPolarAngle = parseAngleDegrees(minP, 0);
-                controls.maxPolarAngle = parseAngleDegrees(maxP, Math.PI);
-
-                const isFiniteMinA = minA !== null && minA !== undefined && minA !== "" && minA !== "null";
-                const isFiniteMaxA = maxA !== null && maxA !== undefined && maxA !== "" && maxA !== "null";
-
-                if (isFiniteMinA && isFiniteMaxA) {
-                    const initialAzimuth = controls.getAzimuthalAngle();
-                    const minOffset = THREE.MathUtils.degToRad(Number(minA));
-                    const maxOffset = THREE.MathUtils.degToRad(Number(maxA));
-
-                    // Validate that finite azimuth limits form a valid interval smaller than 360 degrees
-                    if (maxOffset - minOffset < Math.PI * 2) {
-                        controls.minAzimuthAngle = initialAzimuth + minOffset;
-                        controls.maxAzimuthAngle = initialAzimuth + maxOffset;
-                    } else {
-                        controls.minAzimuthAngle = -Infinity;
-                        controls.maxAzimuthAngle = Infinity;
-                    }
-                } else {
-                    controls.minAzimuthAngle = parseAngleDegrees(minA, -Infinity);
-                    controls.maxAzimuthAngle = parseAngleDegrees(maxA, Infinity);
-                }
-
-                console.log("3D Viewer Rotation Limits Applied:", {
-                    minInput: minA,
-                    maxInput: maxA,
-                    currentAzimuth: THREE.MathUtils.radToDeg(controls.getAzimuthalAngle()),
-                    minAzimuthDegrees: THREE.MathUtils.radToDeg(controls.minAzimuthAngle),
-                    maxAzimuthDegrees: THREE.MathUtils.radToDeg(controls.maxAzimuthAngle),
-                    minPolarDegrees: THREE.MathUtils.radToDeg(controls.minPolarAngle),
-                    maxPolarDegrees: THREE.MathUtils.radToDeg(controls.maxPolarAngle),
-                });
-
-                const defDist = baseDist * 1.5;
-                controls.maxDistance = defDist / (parseFloat(minz) || 0.1);
-                controls.minDistance = defDist / (parseFloat(maxz) || 10.0);
-
-                controls.update();
-                isLoading = false;
-                document.getElementById('loading').style.display = 'none';
-                if (window.flutter_inappwebview) requestAnimationFrame(() => window.flutter_inappwebview.callHandler('onLoadComplete'));
-            }, undefined, (e) => {
-                isLoading = false;
-                document.getElementById('loading').style.display = 'none';
-                if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onLoadError', e.toString());
-            });
         }
+
+        init();
+        animate();
 
         function init() {
             try {
@@ -197,6 +86,7 @@
                 window.toggleAnimation = (p) => { if (mixer) for (let k in actions) actions[k].paused = !p; };
                 window.setAnimationProgress = (n, p) => { if (actions[n]) { actions[n].paused = true; actions[n].time = actions[n].getClip().duration * p; mixer.update(0); } };
 
+                // Parse Hash
                 const hash = decodeURIComponent(window.location.hash.substring(1));
                 if (hash) {
                     const p = hash.split('|');
@@ -207,6 +97,118 @@
 
                 if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onViewerReady');
             } catch (e) { console.error(e); }
+        }
+
+        // LOAD MODEL FUNCTION
+        function loadModel(path, bg, zoom, play, minz, maxz, be, ze, re, pe, nl, cp, tp, minP, maxP, minA, maxA) {
+            if (isLoading || !path) return;
+            isLoading = true;
+            lastLoadedPath = path;
+            enableBoundaries = (be === true || be === 'true');
+
+            if (bg === 'transparent' || bg === '#00000000') {
+                scene.background = null;
+                renderer.setClearColor(0x000000, 0);
+            } else {
+                scene.background = new THREE.Color(bg || '#f0f0f0');
+                renderer.setClearColor(scene.background, 1);
+            }
+
+            // Apply interaction settings
+            controls.enableZoom = ze === true || ze === 'true';
+            controls.enableRotate = re === true || re === 'true';
+            controls.enablePan = pe === true || pe === 'true';
+
+            if (currentModel) scene.remove(currentModel);
+            if (mixer) { mixer.stopAllAction(); mixer = null; }
+            actions = {};
+
+            if (nl === true || nl === 'true') document.getElementById('loading').style.display = 'flex';
+            if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onLoadStart');
+
+            loader.load(path, (gltf) => {
+                currentModel = gltf.scene;
+                currentModel.traverse(o => { if (o.isMesh) { o.castShadow = true; if (o.isSkinnedMesh) o.frustumCulled = false; } });
+                scene.add(currentModel);
+
+                if (gltf.animations.length > 0) {
+                    mixer = new THREE.AnimationMixer(currentModel);
+                    const list = gltf.animations.map(c => {
+                        const a = mixer.clipAction(c); actions[c.name] = a; a.play();
+                        if (play === false || play === 'false') a.paused = true;
+                        return { name: c.name, duration: c.duration };
+                    });
+                    if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onAnimationsLoaded', list);
+                }
+
+                const box = new THREE.Box3().setFromObject(currentModel);
+                initCenter = box.getCenter(new THREE.Vector3());
+                initSize = box.getSize(new THREE.Vector3());
+                const maxSize = Math.max(initSize.x, initSize.y, initSize.z);
+                const baseDist = maxSize / (2 * Math.atan(camera.fov * Math.PI / 360));
+
+                if (tp && tp !== "null") {
+                    const t = tp.split(','); controls.target.set(parseFloat(t[0]), parseFloat(t[1]), parseFloat(t[2]));
+                } else {
+                    controls.target.copy(initCenter);
+                }
+
+                const zVal = parseFloat(zoom) || 1.0;
+                if (cp && cp !== "null") {
+                    const c = cp.split(','); camera.position.set(parseFloat(c[0]), parseFloat(c[1]), parseFloat(c[2]));
+                } else {
+                    camera.position.set(initCenter.x, initCenter.y, initCenter.z + (baseDist * 1.5 / zVal));
+                }
+
+                // --- Apply Rotation Limits ---
+                controls.update(); // Calculate current azimuthal angle
+
+                // Polar Limits
+                controls.minPolarAngle = parseAngleDegrees(minP, 0);
+                controls.maxPolarAngle = parseAngleDegrees(maxP, Math.PI);
+
+                // Azimuthal Limits (Relative to initial orientation)
+                const isFiniteMinA = minA !== null && minA !== undefined && minA !== "" && minA !== "null";
+                const isFiniteMaxA = maxA !== null && maxA !== undefined && maxA !== "" && maxA !== "null";
+
+                if (isFiniteMinA && isFiniteMaxA) {
+                    const currentAzimuth = controls.getAzimuthalAngle();
+                    const minOffset = THREE.MathUtils.degToRad(Number(minA));
+                    const maxOffset = THREE.MathUtils.degToRad(Number(maxA));
+
+                    // OrbitControls uses 'minAzimuthAngle' and 'maxAzimuthAngle'
+                    if (maxOffset - minOffset < Math.PI * 2) {
+                        controls.minAzimuthAngle = currentAzimuth + minOffset;
+                        controls.maxAzimuthAngle = currentAzimuth + maxOffset;
+                    } else {
+                        controls.minAzimuthAngle = -Infinity;
+                        controls.maxAzimuthAngle = Infinity;
+                    }
+                } else {
+                    controls.minAzimuthAngle = parseAngleDegrees(minA, -Infinity);
+                    controls.maxAzimuthAngle = parseAngleDegrees(maxA, Infinity);
+                }
+
+                console.log("Rotation Limits Final:", {
+                    minAz: controls.minAzimuthAngle,
+                    maxAz: controls.maxAzimuthAngle,
+                    minPol: controls.minPolarAngle,
+                    maxPol: controls.maxPolarAngle
+                });
+
+                const defDist = baseDist * 1.5;
+                controls.maxDistance = defDist / (parseFloat(minz) || 0.1);
+                controls.minDistance = defDist / (parseFloat(maxz) || 10.0);
+
+                controls.update();
+                isLoading = false;
+                document.getElementById('loading').style.display = 'none';
+                if (window.flutter_inappwebview) requestAnimationFrame(() => window.flutter_inappwebview.callHandler('onLoadComplete'));
+            }, undefined, (e) => {
+                isLoading = false;
+                document.getElementById('loading').style.display = 'none';
+                if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onLoadError', e.toString());
+            });
         }
 
         function animate() {
@@ -223,9 +225,6 @@
             }
             renderer.render(scene, camera);
         }
-
-        init();
-        animate();
     </script>
 </body>
 </html>

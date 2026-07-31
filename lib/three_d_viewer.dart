@@ -31,18 +31,29 @@ class ThreeDRotationLimits {
 }
 
 class ThreeDZoomConfig {
+  /// The starting zoom level. 1.0 is standard fit.
   final double initialZoom;
+
+  /// Minimum zoom-out level.
   final double minZoom;
+
+  /// Maximum zoom-in level.
   final double maxZoom;
+
+  /// Whether pinch-to-zoom is enabled.
   final bool enableZoom;
 
   const ThreeDZoomConfig({
     this.initialZoom = 1.0,
-    this.minZoom = 0.5,
-    this.maxZoom = 5.0,
+    double? minZoom,
+    double? maxZoom,
     this.enableZoom = true,
-  }) : assert(initialZoom >= minZoom && initialZoom <= maxZoom,
-            'initialZoom must be between minZoom and maxZoom');
+  })  : minZoom = minZoom ?? (initialZoom < 0.5 ? initialZoom : 0.5),
+        maxZoom = maxZoom ?? (initialZoom > 5.0 ? initialZoom : 5.0),
+        assert(
+            initialZoom >= (minZoom ?? (initialZoom < 0.5 ? initialZoom : 0.5)) &&
+                initialZoom <= (maxZoom ?? (initialZoom > 5.0 ? initialZoom : 5.0)),
+            'initialZoom ($initialZoom) must be between minZoom ($minZoom) and maxZoom ($maxZoom)');
 }
 
 class ThreeDViewerController {
@@ -72,7 +83,7 @@ class ThreeDViewer extends StatefulWidget {
     this.backgroundColor = const Color(0xFFF0F0F0),
     this.zoomConfig = const ThreeDZoomConfig(),
     this.enableRotate = true,
-    this.enablePan = true,
+    this.enablePan = false,
     this.enableBoundaries = true,
     this.rotationLimits,
     this.initialCameraPosition,

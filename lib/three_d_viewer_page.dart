@@ -67,8 +67,6 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                   ),
                   zoomConfig: ThreeDZoomConfig(
                     initialZoom: widget.initialZoom,
-                    minZoom: 0.1,
-                    enableZoom: false
                   ),
                   controller: _controller,
                   assetPath: widget.modelPath,
