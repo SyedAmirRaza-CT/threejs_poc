@@ -42,18 +42,12 @@
 
         const loader = new GLTFLoader();
 
-        // Helper to parse degrees into radians
         function parseAngleDegrees(value, defaultValue) {
-            if (value === null || value === undefined || value === "" || value === "null") {
-                return defaultValue;
-            }
+            if (value === null || value === undefined || value === "" || value === "null") return defaultValue;
             const degrees = Number(value);
             if (!Number.isFinite(degrees)) return defaultValue;
             return THREE.MathUtils.degToRad(degrees);
         }
-
-        init();
-        animate();
 
         function init() {
             try {
@@ -86,49 +80,46 @@
                 window.toggleAnimation = (p) => { if (mixer) for (let k in actions) actions[k].paused = !p; };
                 window.setAnimationProgress = (n, p) => { if (actions[n]) { actions[n].paused = true; actions[n].time = actions[n].getClip().duration * p; mixer.update(0); } };
 
-                // Parse Hash
                 const hash = decodeURIComponent(window.location.hash.substring(1));
                 if (hash) {
                     const p = hash.split('|');
-                    if (p.length >= 17) {
-                        loadModel(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15], p[16]);
-                    }
+                    if (p.length >= 17) loadModel(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15], p[16]);
                 }
-
                 if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onViewerReady');
             } catch (e) { console.error(e); }
         }
 
-        // LOAD MODEL FUNCTION
         function loadModel(path, bg, zoom, play, minz, maxz, be, ze, re, pe, nl, cp, tp, minP, maxP, minA, maxA) {
             if (isLoading || !path) return;
             isLoading = true;
             lastLoadedPath = path;
             enableBoundaries = (be === true || be === 'true');
 
-            if (bg === 'transparent' || bg === '#00000000') {
-                scene.background = null;
-                renderer.setClearColor(0x000000, 0);
-            } else {
-                scene.background = new THREE.Color(bg || '#f0f0f0');
-                renderer.setClearColor(scene.background, 1);
-            }
+            if (bg === 'transparent' || bg === '#00000000') { scene.background = null; renderer.setClearColor(0x000000, 0); }
+            else { scene.background = new THREE.Color(bg || '#f0f0f0'); renderer.setClearColor(scene.background, 1); }
 
-            // Apply interaction settings
             controls.enableZoom = ze === true || ze === 'true';
             controls.enableRotate = re === true || re === 'true';
             controls.enablePan = pe === true || pe === 'true';
+            controls.minPolarAngle = parseAngleDegrees(minP, 0);
+            controls.maxPolarAngle = parseAngleDegrees(maxP, Math.PI);
+
+            const minAzimuth = parseAngleDegrees(minA, -Infinity);
+            const maxAzimuth = parseAngleDegrees(maxA, Infinity);
+            if (minAzimuth !== -Infinity && maxAzimuth !== Infinity && Math.abs(maxAzimuth - minAzimuth) < Math.PI * 2) {
+                controls.minAzimuthAngle = minAzimuth; controls.maxAzimuthAngle = maxAzimuth;
+            } else {
+                controls.minAzimuthAngle = -Infinity; controls.maxAzimuthAngle = Infinity;
+            }
 
             if (currentModel) scene.remove(currentModel);
             if (mixer) { mixer.stopAllAction(); mixer = null; }
             actions = {};
-
             if (nl === true || nl === 'true') document.getElementById('loading').style.display = 'flex';
-            if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onLoadStart');
 
             loader.load(path, (gltf) => {
                 currentModel = gltf.scene;
-                currentModel.traverse(o => { if (o.isMesh) { o.castShadow = true; if (o.isSkinnedMesh) o.frustumCulled = false; } });
+                currentModel.traverse(o => { if(o.isMesh) { o.castShadow = true; if(o.isSkinnedMesh) o.frustumCulled = false; } });
                 scene.add(currentModel);
 
                 if (gltf.animations.length > 0) {
@@ -153,53 +144,34 @@
                     controls.target.copy(initCenter);
                 }
 
-                const zVal = parseFloat(zoom) || 1.0;
+                // INTUITIVE CAMERA POSITION: [Horizontal Angle, Vertical Angle, Distance]
                 if (cp && cp !== "null") {
-                    const c = cp.split(','); camera.position.set(parseFloat(c[0]), parseFloat(c[1]), parseFloat(c[2]));
+                    const c = cp.split(',');
+                    const yaw = THREE.MathUtils.degToRad(parseFloat(c[0]) || 0);
+                    const pitch = THREE.MathUtils.degToRad(parseFloat(c[1]) || 90);
+                    const dist = (parseFloat(c[2]) || baseDist * 1.5) / (parseFloat(zoom) || 1.0);
+
+                    camera.position.x = controls.target.x + dist * Math.sin(pitch) * Math.sin(yaw);
+                    camera.position.y = controls.target.y + dist * Math.cos(pitch);
+                    camera.position.z = controls.target.z + dist * Math.sin(pitch) * Math.cos(yaw);
                 } else {
-                    camera.position.set(initCenter.x, initCenter.y, initCenter.z + (baseDist * 1.5 / zVal));
+                    camera.position.set(initCenter.x, initCenter.y, initCenter.z + (baseDist * 1.5 / (parseFloat(zoom) || 1.0)));
                 }
 
-                // --- Apply Rotation Limits ---
-                controls.update(); // Calculate current azimuthal angle
-
-                // Polar Limits
-                controls.minPolarAngle = parseAngleDegrees(minP, 0);
-                controls.maxPolarAngle = parseAngleDegrees(maxP, Math.PI);
-
-                // Azimuthal Limits (Relative to initial orientation)
-                const isFiniteMinA = minA !== null && minA !== undefined && minA !== "" && minA !== "null";
-                const isFiniteMaxA = maxA !== null && maxA !== undefined && maxA !== "" && maxA !== "null";
-
-                if (isFiniteMinA && isFiniteMaxA) {
-                    const currentAzimuth = controls.getAzimuthalAngle();
-                    const minOffset = THREE.MathUtils.degToRad(Number(minA));
-                    const maxOffset = THREE.MathUtils.degToRad(Number(maxA));
-
-                    // OrbitControls uses 'minAzimuthAngle' and 'maxAzimuthAngle'
-                    if (maxOffset - minOffset < Math.PI * 2) {
-                        controls.minAzimuthAngle = currentAzimuth + minOffset;
-                        controls.maxAzimuthAngle = currentAzimuth + maxOffset;
-                    } else {
-                        controls.minAzimuthAngle = -Infinity;
-                        controls.maxAzimuthAngle = Infinity;
-                    }
+                // APPLY ZOOM LIMITS relative to baseDist
+                if (minz !== "null" && minz !== undefined && minz !== "") {
+                    controls.maxDistance = (baseDist * 1.5) / parseFloat(minz);
                 } else {
-                    controls.minAzimuthAngle = parseAngleDegrees(minA, -Infinity);
-                    controls.maxAzimuthAngle = parseAngleDegrees(maxA, Infinity);
+                    controls.maxDistance = 10000;
                 }
 
-                console.log("Rotation Limits Final:", {
-                    minAz: controls.minAzimuthAngle,
-                    maxAz: controls.maxAzimuthAngle,
-                    minPol: controls.minPolarAngle,
-                    maxPol: controls.maxPolarAngle
-                });
+                if (maxz !== "null" && maxz !== undefined && maxz !== "") {
+                    controls.minDistance = (baseDist * 1.5) / parseFloat(maxz);
+                } else {
+                    controls.minDistance = 0.01;
+                }
 
-                const defDist = baseDist * 1.5;
-                controls.maxDistance = defDist / (parseFloat(minz) || 0.1);
-                controls.minDistance = defDist / (parseFloat(maxz) || 10.0);
-
+                camera.lookAt(controls.target);
                 controls.update();
                 isLoading = false;
                 document.getElementById('loading').style.display = 'none';
@@ -225,6 +197,8 @@
             }
             renderer.render(scene, camera);
         }
+        init();
+        animate();
     </script>
 </body>
 </html>

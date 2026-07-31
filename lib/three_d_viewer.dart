@@ -34,25 +34,23 @@ class ThreeDZoomConfig {
   /// The starting zoom level. 1.0 is standard fit.
   final double initialZoom;
 
-  /// Minimum zoom-out level.
-  final double minZoom;
+  /// Minimum zoom-out level. If null, zoom-out is unrestricted.
+  final double? minZoom;
 
-  /// Maximum zoom-in level.
-  final double maxZoom;
+  /// Maximum zoom-in level. If null, zoom-in is unrestricted.
+  final double? maxZoom;
 
   /// Whether pinch-to-zoom is enabled.
   final bool enableZoom;
 
   const ThreeDZoomConfig({
     this.initialZoom = 1.0,
-    double? minZoom,
-    double? maxZoom,
+    this.minZoom,
+    this.maxZoom,
     this.enableZoom = true,
-  })  : minZoom = minZoom ?? (initialZoom < 0.5 ? initialZoom : 0.5),
-        maxZoom = maxZoom ?? (initialZoom > 5.0 ? initialZoom : 5.0),
-        assert(
-            initialZoom >= (minZoom ?? (initialZoom < 0.5 ? initialZoom : 0.5)) &&
-                initialZoom <= (maxZoom ?? (initialZoom > 5.0 ? initialZoom : 5.0)),
+  }) : assert(
+            (minZoom == null || initialZoom >= minZoom) &&
+                (maxZoom == null || initialZoom <= maxZoom),
             'initialZoom ($initialZoom) must be between minZoom ($minZoom) and maxZoom ($maxZoom)');
 }
 
@@ -129,8 +127,8 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
       path = "http://127.0.0.1:8080$path";
     }
 
-    String hexColor = widget.backgroundColor == Colors.transparent 
-        ? 'transparent' 
+    String hexColor = widget.backgroundColor == Colors.transparent
+        ? 'transparent'
         : '#${widget.backgroundColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
 
     return [
@@ -138,8 +136,8 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
       hexColor,                                 // 1
       widget.zoomConfig.initialZoom,            // 2
       widget.autoPlay,                          // 3
-      widget.zoomConfig.minZoom,                // 4
-      widget.zoomConfig.maxZoom,                // 5
+      widget.zoomConfig.minZoom ?? "null",      // 4
+      widget.zoomConfig.maxZoom ?? "null",      // 5
       widget.enableBoundaries,                  // 6
       widget.zoomConfig.enableZoom,             // 7
       widget.enableRotate,                      // 8
