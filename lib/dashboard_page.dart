@@ -44,12 +44,14 @@ class DashboardPage extends StatelessWidget {
             const SizedBox(height: 20),
             _buildModelCard(
               context,
-              title: 'Blood Vessel 2',
+              title: 'Blood Vessel',
               icon: Icons.biotech,
               color: Colors.redAccent,
               path: 'assets/animation/blood_vesel.glb',
-              zoom: 1.0,
+              zoom: 1.2, // Slightly zoomed in for better detail
               autoPlay: false,
+              cameraPosition: [-5, 0, 5], // Standard front-center view
+              targetPosition: [1, -1, 0], // Looking at center
             ),
             const SizedBox(height: 20),
             _buildModelCard(
