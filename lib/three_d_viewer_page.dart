@@ -63,6 +63,12 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                   backgroundColor: Colors.transparent,
                   initialZoom: widget.initialZoom,
                   autoPlay: widget.autoPlay,
+                  // rotationLimits: ThreeDRotationLimits(
+                  //   maxPolarAngle: 100,
+                  //   minPolarAngle: 80,
+                  //   maxAzimuthalAngle: 145,
+                  //   minAzimuthalAngle: 90
+                  // ),
                   initialCameraPosition: widget.initialCameraPosition,
                   initialTargetPosition: widget.initialTargetPosition,
                   customLoader: const Center(

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
@@ -13,6 +14,28 @@ class ThreeDAnimation {
       duration: (map['duration'] as num).toDouble(),
     );
   }
+}
+
+class ThreeDRotationLimits {
+  final double? minPolarAngle;
+  final double? maxPolarAngle;
+  final double? minAzimuthalAngle;
+  final double? maxAzimuthalAngle;
+
+  const ThreeDRotationLimits({
+    this.minPolarAngle,
+    this.maxPolarAngle,
+    this.minAzimuthalAngle,
+    this.maxAzimuthalAngle,
+  });
+
+  double? _toRad(double? degrees) =>
+      degrees != null ? degrees * (math.pi / 180.0) : null;
+
+  double? get minPolarRad => _toRad(minPolarAngle);
+  double? get maxPolarRad => _toRad(maxPolarAngle);
+  double? get minAzimuthalRad => _toRad(minAzimuthalAngle);
+  double? get maxAzimuthalRad => _toRad(maxAzimuthalAngle);
 }
 
 class ThreeDViewerController {
@@ -41,6 +64,7 @@ class ThreeDViewer extends StatefulWidget {
   final bool enableRotate;
   final bool enablePan;
   final bool enableBoundaries;
+  final ThreeDRotationLimits? rotationLimits;
   final List<double>? initialCameraPosition;
   final List<double>? initialTargetPosition;
   final bool autoPlay;
@@ -54,11 +78,12 @@ class ThreeDViewer extends StatefulWidget {
     this.backgroundColor = const Color(0xFFF0F0F0),
     this.initialZoom = 1.0,
     this.minZoom = 0.5,
-    this.maxZoom = 10.0,
+    this.maxZoom = 5.0,
     this.enableZoom = true,
     this.enableRotate = true,
     this.enablePan = true,
     this.enableBoundaries = true,
+    this.rotationLimits,
     this.initialCameraPosition,
     this.initialTargetPosition,
     this.autoPlay = true,
@@ -76,7 +101,6 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
   static InAppLocalhostServer? _localhostServer;
   bool isServerRunning = false;
   bool isLoadingModel = true;
-  double loadingProgress = 0.0;
 
   @override
   void initState() {
@@ -91,28 +115,20 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
       await _localhostServer!.start();
     }
     if (mounted) {
-      setState(() {
-        isServerRunning = true;
-      });
+      setState(() => isServerRunning = true);
     }
   }
 
   void _toggleAnimation(bool play) {
-    webViewController?.evaluateJavascript(
-      source: "window.toggleAnimation($play);",
-    );
+    webViewController?.evaluateJavascript(source: "window.toggleAnimation($play);");
   }
 
   void _setAnimationProgress(String name, double progress) {
-    webViewController?.evaluateJavascript(
-      source: "window.setAnimationProgress('$name', $progress);",
-    );
+    webViewController?.evaluateJavascript(source: "window.setAnimationProgress('$name', $progress);");
   }
 
   void _setAnimationTime(String name, double time) {
-    webViewController?.evaluateJavascript(
-      source: "window.setAnimationTime('$name', $time);",
-    );
+    webViewController?.evaluateJavascript(source: "window.setAnimationTime('$name', $time);");
   }
 
   @override
@@ -123,49 +139,37 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
 
     String path = widget.assetPath;
     final bool isRemote = path.startsWith('http://') || path.startsWith('https://');
-    
     if (!isRemote) {
-      if (!path.startsWith('/')) {
-        path = "/$path";
-      }
+      if (!path.startsWith('/')) path = "/$path";
       path = "http://127.0.0.1:8080$path";
     }
 
-    String hexColor;
-    if (widget.backgroundColor == Colors.transparent) {
-      hexColor = 'transparent';
-    } else {
-      hexColor = '#${widget.backgroundColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
-    }
+    String hexColor = widget.backgroundColor == Colors.transparent 
+        ? 'transparent' 
+        : '#${widget.backgroundColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
 
-    // Pass whether we should show the native (JS-based) loader or use Flutter's
-    bool showNativeLoader = widget.customLoader == null;
+    String cameraPosStr = widget.initialCameraPosition?.join(',') ?? "null";
+    String targetPosStr = widget.initialTargetPosition?.join(',') ?? "null";
 
-    String cameraPosStr = "null";
-    if (widget.initialCameraPosition != null && widget.initialCameraPosition!.length >= 3) {
-      cameraPosStr = widget.initialCameraPosition!.join(',');
-    }
-
-    String targetPosStr = "null";
-    if (widget.initialTargetPosition != null && widget.initialTargetPosition!.length >= 3) {
-      targetPosStr = widget.initialTargetPosition!.join(',');
-    }
-
-    // Passing config via Hash Fragment (13 parameters)
+    // Build configuration hash (17 parameters)
     final String config = [
       path,
       hexColor,
-      widget.initialZoom.toString(),
-      widget.autoPlay.toString(),
-      widget.minZoom.toString(),
-      widget.maxZoom.toString(),
-      widget.enableBoundaries.toString(),
-      widget.enableZoom.toString(),
-      widget.enableRotate.toString(),
-      widget.enablePan.toString(),
-      showNativeLoader.toString(),
+      widget.initialZoom,
+      widget.autoPlay,
+      widget.minZoom,
+      widget.maxZoom,
+      widget.enableBoundaries,
+      widget.enableZoom,
+      widget.enableRotate,
+      widget.enablePan,
+      widget.customLoader == null, // showNativeLoader
       cameraPosStr,
       targetPosStr,
+      widget.rotationLimits?.minPolarRad ?? "null",
+      widget.rotationLimits?.maxPolarRad ?? "null",
+      widget.rotationLimits?.minAzimuthalRad ?? "null",
+      widget.rotationLimits?.maxAzimuthalRad ?? "null",
     ].join('|');
 
     final String initialUrl = "http://127.0.0.1:8080/assets/web_viewer/index.html#${Uri.encodeComponent(config)}";
@@ -173,59 +177,42 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
     return Stack(
       children: [
         InAppWebView(
-          initialUrlRequest: URLRequest(
-            url: WebUri(initialUrl),
-          ),
+          initialUrlRequest: URLRequest(url: WebUri(initialUrl)),
           initialSettings: InAppWebViewSettings(
-            allowFileAccessFromFileURLs: true,
-            allowUniversalAccessFromFileURLs: true,
             javaScriptEnabled: true,
             transparentBackground: true,
-            useWideViewPort: true,
-            loadWithOverviewMode: true,
             supportZoom: false,
-            cacheEnabled: true, // Enable cache for faster startup
+            cacheEnabled: true,
             disableContextMenu: true,
           ),
           onWebViewCreated: (controller) {
             webViewController = controller;
             controller.addJavaScriptHandler(
+              handlerName: 'onViewerReady',
+              callback: (args) => _sendModelData(),
+            );
+            controller.addJavaScriptHandler(
               handlerName: 'onLoadStart',
               callback: (args) => setState(() => isLoadingModel = true),
             );
             controller.addJavaScriptHandler(
-              handlerName: 'onLoadProgress',
-              callback: (args) => setState(() => loadingProgress = args[0] / 100.0),
-            );
-            controller.addJavaScriptHandler(
               handlerName: 'onLoadComplete',
               callback: (args) async {
-                debugPrint("3D Viewer: Load Complete");
-                // Wait for a small delay to ensure the browser has actually rendered the first frame
                 await Future.delayed(const Duration(milliseconds: 200));
-                if (mounted) {
-                  setState(() => isLoadingModel = false);
-                }
+                if (mounted) setState(() => isLoadingModel = false);
               },
             );
             controller.addJavaScriptHandler(
               handlerName: 'onLoadError',
               callback: (args) {
-                debugPrint("3D Viewer Error: ${args[0]}");
-                if (mounted) {
-                  setState(() => isLoadingModel = false);
-                }
-                // You could show a snackbar or error widget here
+                if (mounted) setState(() => isLoadingModel = false);
               },
             );
             controller.addJavaScriptHandler(
               handlerName: 'onAnimationsLoaded',
               callback: (args) {
                 final List<dynamic> anims = args[0] as List<dynamic>;
-                final List<ThreeDAnimation> animations = anims
-                    .map((e) => ThreeDAnimation.fromMap(e as Map<dynamic, dynamic>))
-                    .toList();
-                widget.onAnimationsLoaded?.call(animations);
+                widget.onAnimationsLoaded?.call(anims.map((e) => ThreeDAnimation.fromMap(e as Map)).toList());
               },
             );
           },
@@ -253,40 +240,20 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
 
     String path = widget.assetPath;
     final bool isRemote = path.startsWith('http://') || path.startsWith('https://');
-    
     if (!isRemote) {
-      // Local assets are served from http://127.0.0.1:8080/
-      // Since index.html is at /assets/web_viewer/index.html,
-      // a model at /assets/animation/girl.glb is at "../../animation/girl.glb" relative to index.html
-      if (!path.startsWith('/')) {
-        path = "/$path";
-      }
-      // Use absolute path for the localhost server to avoid confusion
+      if (!path.startsWith('/')) path = "/$path";
       path = "http://127.0.0.1:8080$path";
     }
 
-    String hexColor;
-    if (widget.backgroundColor == Colors.transparent) {
-      hexColor = 'transparent';
-    } else {
-      hexColor = '#${widget.backgroundColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
-    }
+    String hexColor = widget.backgroundColor == Colors.transparent 
+        ? 'transparent' 
+        : '#${widget.backgroundColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
     
-    String cameraPosJs = "null";
-    if (widget.initialCameraPosition != null && widget.initialCameraPosition!.length >= 3) {
-      cameraPosJs = "{x: ${widget.initialCameraPosition![0]}, y: ${widget.initialCameraPosition![1]}, z: ${widget.initialCameraPosition![2]}}";
-    }
-
-    String targetPosJs = "null";
-    if (widget.initialTargetPosition != null && widget.initialTargetPosition!.length >= 3) {
-      targetPosJs = "{x: ${widget.initialTargetPosition![0]}, y: ${widget.initialTargetPosition![1]}, z: ${widget.initialTargetPosition![2]}}";
-    }
-
-    // Pass whether we should show the native (JS-based) loader or use Flutter's
-    bool showNativeLoader = widget.customLoader == null;
+    String cameraPosStr = widget.initialCameraPosition?.join(',') ?? "null";
+    String targetPosStr = widget.initialTargetPosition?.join(',') ?? "null";
 
     webViewController?.evaluateJavascript(
-      source: "if(window.loadModelWithConfig) window.loadModelWithConfig('$path', '$hexColor', ${widget.initialZoom}, ${widget.enableZoom}, ${widget.autoPlay}, $cameraPosJs, $targetPosJs, ${widget.enableRotate}, ${widget.enablePan}, $showNativeLoader, ${widget.minZoom}, ${widget.maxZoom}, ${widget.enableBoundaries});",
+      source: "if(window.loadModelWithConfig) window.loadModelWithConfig('$path', '$hexColor', ${widget.initialZoom}, ${widget.enableZoom}, ${widget.autoPlay}, '$cameraPosStr', '$targetPosStr', ${widget.enableRotate}, ${widget.enablePan}, ${widget.customLoader == null}, ${widget.minZoom}, ${widget.maxZoom}, ${widget.enableBoundaries}, '${widget.rotationLimits?.minPolarRad ?? "null"}', '${widget.rotationLimits?.maxPolarRad ?? "null"}', '${widget.rotationLimits?.minAzimuthalRad ?? "null"}', '${widget.rotationLimits?.maxAzimuthalRad ?? "null"}');",
     );
   }
 }

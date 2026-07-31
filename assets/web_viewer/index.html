@@ -5,76 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Three.js Viewer</title>
     <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: transparent;
-            -webkit-user-select: none;
-            -webkit-touch-callout: none;
-            user-select: none;
-        }
+        body { margin: 0; overflow: hidden; background-color: transparent; -webkit-user-select: none; user-select: none; }
         canvas { display: block; width: 100vw; height: 100vh; }
         #loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: #333;
-            font-family: sans-serif;
-            text-align: center;
-            pointer-events: none;
-            z-index: 10;
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #333; font-family: sans-serif; text-align: center;
+            z-index: 10; display: none; flex-direction: column; align-items: center;
         }
         .spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid rgba(0, 0, 0, 0.1);
-            border-top: 5px solid #3498db;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 10px;
+            width: 40px; height: 40px; border: 4px solid rgba(0, 0, 0, 0.1);
+            border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-    <div id="loading">
-        <div class="spinner"></div>
-        <p id="loading-text">Loading...</p>
-    </div>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "./three.module.js",
-                "three/addons/": "./jsm/"
-            }
-        }
-    </script>
+    <div id="loading"><div class="spinner"></div><p id="loading-text">Loading...</p></div>
+    <script type="importmap"> { "imports": { "three": "./three.module.js", "three/addons/": "./jsm/" } } </script>
     <script type="module">
         import * as THREE from 'three';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        let scene, camera, renderer, controls, currentModel;
-        let mixer, clock;
+        let scene, camera, renderer, controls, currentModel, mixer, clock;
         let actions = {};
         let isLoading = false;
         let lastLoadedPath = "";
         let enableBoundaries = true;
 
-        // Global Error Handling
-        window.onerror = function(message, source, lineno, colno, error) {
-            console.error("Global JS Error:", message);
-            if (window.flutter_inappwebview) {
-                window.flutter_inappwebview.callHandler('onLoadError', message);
-            }
+        window.onerror = function(message) {
+            console.error("3D JS Error:", message);
+            if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onLoadError', message);
             return false;
         };
 
@@ -85,254 +46,182 @@
 
         function init() {
             try {
-                // Parsing logic for Hash
-                const hash = window.location.hash.substring(1);
-                const decodedHash = decodeURIComponent(hash);
-                const parts = decodedHash.split('|');
-
-                const modelPath = parts[0];
-                const bgColor = parts[1];
-                const initialZoom = parseFloat(parts[2] || "1.0");
-                const autoPlay = parts[3] === 'true';
-                const minZoom = parseFloat(parts[4] || "0.5");
-                const maxZoom = parseFloat(parts[5] || "10.0");
-                const boundEnabled = parts[6] === 'true';
-                const zoomEnabled = parts[7] === 'true';
-                const rotateEnabled = parts[8] === 'true';
-                const panEnabled = parts[9] === 'true';
-                const nativeLoaderEnabled = parts[10] === 'true';
-                const cameraPosStr = parts[11];
-                const targetPosStr = parts[12];
-
-                enableBoundaries = boundEnabled; // Update global state
-
-                let cameraPos = null;
-                if (cameraPosStr && cameraPosStr !== "null") {
-                    const c = cameraPosStr.split(',');
-                    cameraPos = { x: parseFloat(c[0]), y: parseFloat(c[1]), z: parseFloat(c[2]) };
-                }
-
-                let targetPos = null;
-                if (targetPosStr && targetPosStr !== "null") {
-                    const t = targetPosStr.split(',');
-                    targetPos = { x: parseFloat(t[0]), y: parseFloat(t[1]), z: parseFloat(t[2]) };
-                }
-
                 clock = new THREE.Clock();
                 scene = new THREE.Scene();
-
-                camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 5000);
-                camera.position.set(0, 1.6, 5);
+                camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 10000);
 
                 renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
                 renderer.setSize(window.innerWidth, window.innerHeight);
                 renderer.setPixelRatio(window.devicePixelRatio);
                 renderer.shadowMap.enabled = true;
-                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
                 renderer.outputColorSpace = THREE.SRGBColorSpace;
-
                 document.body.appendChild(renderer.domElement);
 
                 controls = new OrbitControls(camera, renderer.domElement);
                 controls.enableDamping = true;
-                controls.dampingFactor = 0.05;
 
                 const ambientLight = new THREE.AmbientLight(0xffffff, 2);
                 scene.add(ambientLight);
+                const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+                dirLight.position.set(5, 10, 7.5);
+                scene.add(dirLight);
 
-                const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
-                directionalLight.position.set(5, 10, 7.5);
-                directionalLight.castShadow = true;
-                directionalLight.shadow.bias = -0.001;
-                scene.add(directionalLight);
+                window.addEventListener('resize', () => {
+                    camera.aspect = window.innerWidth / window.innerHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                });
 
-                window.addEventListener('resize', onWindowResize, false);
-
-                // Expose controller functions
-                window.loadModelWithConfig = function(p, bg, z, ze, pl, cp, tp, re, pe, nl, minz, maxz, be) {
-                    loadModel(p, bg, z, ze, pl, cp, tp, re, pe, nl, minz, maxz, be);
-                };
+                // Control functions exposed to window for Flutter
+                window.loadModelWithConfig = loadModel;
 
                 window.toggleAnimation = function(play) {
+                    console.log("JS: Toggling animation to " + play);
                     if (!mixer) return;
-                    for (let key in actions) actions[key].paused = !play;
+                    for (let key in actions) {
+                        actions[key].paused = !play;
+                    }
                 };
 
                 window.setAnimationProgress = function(name, progress) {
                     if (actions[name]) {
                         const action = actions[name];
+                        const clip = action.getClip();
                         action.paused = true;
-                        action.time = action.getClip().duration * progress;
+                        action.time = clip.duration * progress;
                         mixer.update(0);
                     }
                 };
 
-                // Start loading immediately
-                if (modelPath && modelPath !== "null" && modelPath !== "") {
-                    console.log("JS: Auto-loading " + modelPath + " with target " + JSON.stringify(targetPos));
-                    loadModel(modelPath, bgColor, initialZoom, zoomEnabled, autoPlay, cameraPos, targetPos, rotateEnabled, panEnabled, nativeLoaderEnabled, minZoom, maxZoom, boundEnabled);
+                window.setAnimationTime = function(name, time) {
+                    if (actions[name]) {
+                        const action = actions[name];
+                        action.paused = true;
+                        action.time = time;
+                        mixer.update(0);
+                    }
+                };
+
+                // Auto-load from Hash if present
+                const hash = decodeURIComponent(window.location.hash.substring(1));
+                if (hash) {
+                    const p = hash.split('|');
+                    if (p.length >= 17) {
+                        loadModel(p[0], p[1], p[2], p[7]==='true', p[3]==='true', p[11], p[12], p[8]==='true', p[9]==='true', p[10]==='true', p[4], p[5], p[6]==='true', p[13], p[14], p[15], p[16]);
+                    }
                 }
 
                 if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onViewerReady');
-
-            } catch (e) {
-                console.error("Init Error:", e);
-            }
+            } catch (e) { console.error("Init Error:", e); }
         }
 
-        function loadModel(path, bg, zoom, ze, play, cp, tp, re, pe, nl, minz, maxz, be) {
+        function loadModel(path, bg, zoom, ze, play, cp, tp, re, pe, nl, minz, maxz, be, minP, maxP, minA, maxA) {
             if (isLoading || !path) return;
-
             isLoading = true;
             lastLoadedPath = path;
-            enableBoundaries = be !== false;
+            enableBoundaries = be === true || be === 'true';
 
-            // Handle Background
-            if (bg) {
-                if (bg === 'transparent') {
-                    scene.background = null;
-                    renderer.setClearColor(0x000000, 0);
-                } else {
-                    scene.background = new THREE.Color(bg);
-                    renderer.setClearColor(bg, 1);
-                }
-            }
+            if (bg === 'transparent') { scene.background = null; renderer.setClearColor(0x000000, 0); }
+            else { scene.background = new THREE.Color(bg || '#f0f0f0'); renderer.setClearColor(scene.background, 1); }
 
-            // Controls config
-            controls.enableZoom = ze !== false;
-            controls.enableRotate = re !== false;
-            controls.enablePan = pe !== false;
+            controls.enableZoom = ze === true || ze === 'true';
+            controls.enableRotate = re === true || re === 'true';
+            controls.enablePan = pe === true || pe === 'true';
 
-            if (currentModel) {
-                scene.remove(currentModel);
-                currentModel.traverse(child => {
-                    if (child.isMesh) {
-                        child.geometry.dispose();
-                        if (child.material.map) child.material.map.dispose();
-                        child.material.dispose();
-                    }
-                });
-            }
+            // Apply rotation limits
+            controls.minPolarAngle = (minP && minP !== "null") ? parseFloat(minP) : 0;
+            controls.maxPolarAngle = (maxP && maxP !== "null") ? parseFloat(maxP) : Math.PI;
+            controls.minAzimuthalAngle = (minA && minA !== "null") ? parseFloat(minA) : -Infinity;
+            controls.maxAzimuthalAngle = (maxA && maxA !== "null") ? parseFloat(maxA) : Infinity;
 
-            if (mixer) {
-                mixer.stopAllAction();
-                mixer = null;
-                actions = {};
-            }
+            if (currentModel) scene.remove(currentModel);
+            if (mixer) { mixer.stopAllAction(); mixer = null; }
+            actions = {};
 
-            if (nl) {
-                document.getElementById('loading').style.display = 'flex';
-                document.getElementById('loading-text').innerText = "Loading...";
-            }
-
+            if (nl === true || nl === 'true') document.getElementById('loading').style.display = 'flex';
             if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onLoadStart');
 
-            loader.load(path, function (gltf) {
+            loader.load(path, (gltf) => {
                 currentModel = gltf.scene;
-                currentModel.traverse(function (object) {
-                    if (object.isMesh) {
-                        object.castShadow = true;
-                        if (object.isSkinnedMesh) object.frustumCulled = false;
-                    }
-                });
-
+                currentModel.traverse(o => { if(o.isMesh) { o.castShadow = true; if(o.isSkinnedMesh) o.frustumCulled = false; } });
                 scene.add(currentModel);
-                document.getElementById('loading').style.display = 'none';
-                isLoading = false;
 
                 if (gltf.animations && gltf.animations.length > 0) {
                     mixer = new THREE.AnimationMixer(currentModel);
-                    actions = {};
-                    const animationList = gltf.animations.map(clip => {
-                        const action = mixer.clipAction(clip);
-                        actions[clip.name] = action;
-                        action.play();
-                        if (!play) action.paused = true;
-                        return { name: clip.name, duration: clip.duration };
+                    const list = gltf.animations.map(c => {
+                        const a = mixer.clipAction(c);
+                        actions[c.name] = a;
+                        a.play();
+                        if (play === false || play === 'false') a.paused = true;
+                        return { name: c.name, duration: c.duration };
                     });
-                    if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onAnimationsLoaded', animationList);
+                    if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onAnimationsLoaded', list);
                 }
 
-                // Framing
                 const box = new THREE.Box3().setFromObject(currentModel);
-                const size = box.getSize(new THREE.Vector3());
                 const center = box.getCenter(new THREE.Vector3());
-
-                // Calculate distance to fit model
+                const size = box.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z);
                 const fov = camera.fov * (Math.PI / 180);
-                const fitHeightDistance = size.y / (2 * Math.atan(fov / 2));
-                const fitWidthDistance = size.x / (2 * Math.atan(fov / 2) * camera.aspect);
-                const baseDistance = Math.max(fitHeightDistance, fitWidthDistance);
+                const baseDist = maxDim / (2 * Math.atan(fov / 2));
+                const zFactor = parseFloat(zoom) || 1.0;
 
-                if (cp) {
-                    camera.position.set(cp.x, cp.y, cp.z);
-                } else {
-                    const zFactor = zoom || 1.0;
-                    camera.position.set(center.x, center.y, center.z + (baseDistance * 1.5 / zFactor));
-                }
-
-                if (tp) {
-                    controls.target.set(tp.x, tp.y, tp.z);
+                if (tp && tp !== "null") {
+                    const t = tp.split(','); controls.target.set(parseFloat(t[0]), parseFloat(t[1]), parseFloat(t[2]));
                 } else {
                     controls.target.copy(center);
                 }
 
-                // Set zoom limits
-                controls.maxDistance = baseDistance * (4.0 / (minz || 0.5));
-                controls.minDistance = baseDistance * (0.01 / (maxz || 10.0));
+                if (cp && cp !== "null") {
+                    const c = cp.split(',');
+                    const pos = new THREE.Vector3(parseFloat(c[0]), parseFloat(c[1]), parseFloat(c[2]));
+
+                    // If zoom is not 1.0, scale the distance from target to camera
+                    if (zFactor !== 1.0) {
+                        const direction = new THREE.Vector3().subVectors(pos, controls.target);
+                        direction.multiplyScalar(1.0 / zFactor);
+                        camera.position.copy(controls.target).add(direction);
+                    } else {
+                        camera.position.copy(pos);
+                    }
+                } else {
+                    camera.position.set(center.x, center.y, center.z + (baseDist * 1.5 / zFactor));
+                }
+
+                // APPLY ZOOM LIMITS relative to base distance
+                const finalMinZoom = parseFloat(minz) || 0.1;
+                const finalMaxZoom = parseFloat(maxz) || 10.0;
+                controls.maxDistance = (baseDist * 10.0) / finalMinZoom;
+                controls.minDistance = (baseDist * 0.1) / finalMaxZoom;
 
                 camera.lookAt(controls.target);
                 controls.update();
-                renderer.render(scene, camera);
-
-                if (window.flutter_inappwebview) {
-                    requestAnimationFrame(() => {
-                        window.flutter_inappwebview.callHandler('onLoadComplete');
-                    });
-                }
-
-            }, (xhr) => {
-                if (xhr.lengthComputable && nl) {
-                    const percent = Math.round(xhr.loaded / xhr.total * 100);
-                    document.getElementById('loading-text').innerText = "Loading: " + percent + "%";
-                }
-            }, (error) => {
                 isLoading = false;
                 document.getElementById('loading').style.display = 'none';
-                if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onLoadError', error.toString());
+                if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onLoadComplete');
+            }, undefined, (e) => {
+                isLoading = false;
+                document.getElementById('loading').style.display = 'none';
+                if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onLoadError', e.toString());
             });
-        }
-
-        // Add Boundaries Listener
-        function onAnimate() {
-            if (currentModel && enableBoundaries && controls) {
-                const box = new THREE.Box3().setFromObject(currentModel);
-                const size = box.getSize(new THREE.Vector3());
-                const center = box.getCenter(new THREE.Vector3());
-                const limitX = size.x * 2.0;
-                const limitY = size.y * 2.0;
-                const limitZ = size.z * 2.0;
-                controls.target.x = THREE.MathUtils.clamp(controls.target.x, center.x - limitX, center.x + limitX);
-                controls.target.y = THREE.MathUtils.clamp(controls.target.y, center.y - limitY, center.y + limitY);
-                controls.target.z = THREE.MathUtils.clamp(controls.target.z, center.z - limitZ, center.z + limitZ);
-            }
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
         function animate() {
             requestAnimationFrame(animate);
-            const delta = clock ? clock.getDelta() : 0;
-            if (mixer) mixer.update(delta);
+            if (mixer) mixer.update(clock.getDelta());
             if (controls) {
-                onAnimate();
+                if (currentModel && enableBoundaries) {
+                    const b = new THREE.Box3().setFromObject(currentModel);
+                    const s = b.getSize(new THREE.Vector3());
+                    const c = b.getCenter(new THREE.Vector3());
+                    const l = Math.max(s.x, s.y, s.z) * 2;
+                    controls.target.x = THREE.MathUtils.clamp(controls.target.x, c.x-l, c.x+l);
+                    controls.target.y = THREE.MathUtils.clamp(controls.target.y, c.y-l, c.y+l);
+                    controls.target.z = THREE.MathUtils.clamp(controls.target.z, c.z-l, c.z+l);
+                }
                 controls.update();
             }
-            if (renderer && scene && camera) renderer.render(scene, camera);
+            renderer.render(scene, camera);
         }
     </script>
 </body>

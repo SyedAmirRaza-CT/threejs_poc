@@ -31,9 +31,28 @@ Three.js uses a 3D Cartesian coordinate system. Every position is defined by thr
 | `enableRotate` | `bool` | `true` | Allows swiping to spin the model. |
 | `enablePan` | `bool` | `true` | Allows moving the model sideways. |
 | `enableBoundaries` | `bool` | `true` | Prevents the model from being panned off-screen. |
+| `rotationLimits` | `ThreeDRotationLimits` | `null` | Restricts rotation angles (Polar and Azimuthal). |
 | `initialZoom` | `double` | `1.0` | 1.0 is fit-to-screen. 2.0 is double size. |
 | `minZoom` | `double` | `0.5` | Minimum zoom-out level. |
 | `maxZoom` | `double` | `10.0` | Maximum zoom-in level. |
+
+### Using Rotation Limits
+Rotation limits are now defined in **DEGREES** (0-360) for easier use.
+
+```dart
+ThreeDViewer(
+  rotationLimits: ThreeDRotationLimits(
+    minPolarAngle: 0.0,     // Top limit (degrees)
+    maxPolarAngle: 90.0,    // side limit (Stop looking under floor)
+    minAzimuthalAngle: -45.0, // Left spin limit
+    maxAzimuthalAngle: 45.0,  // Right spin limit
+  ),
+)
+```
+
+#### Angle Reference:
+*   **Polar (Vertical):** 0° is top, 90° is side, 180° is bottom.
+*   **Azimuthal (Horizontal):** 0° is front, 90° is right, -90° is left.
 
 ---
 
