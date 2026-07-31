@@ -58,10 +58,12 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
             children: [
               Expanded(
                 child: ThreeDViewer(
+                  zoomConfig: ThreeDZoomConfig(
+                    initialZoom: widget.initialZoom,
+                  ),
                   controller: _controller,
                   assetPath: widget.modelPath,
                   backgroundColor: Colors.transparent,
-                  initialZoom: widget.initialZoom,
                   autoPlay: widget.autoPlay,
                   // rotationLimits: ThreeDRotationLimits(
                   //   maxPolarAngle: 100,

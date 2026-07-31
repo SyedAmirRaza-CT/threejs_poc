@@ -76,28 +76,15 @@
                 window.loadModelWithConfig = loadModel;
 
                 window.toggleAnimation = function(play) {
-                    console.log("JS: Toggling animation to " + play);
                     if (!mixer) return;
-                    for (let key in actions) {
-                        actions[key].paused = !play;
-                    }
+                    for (let key in actions) actions[key].paused = !play;
                 };
 
                 window.setAnimationProgress = function(name, progress) {
                     if (actions[name]) {
                         const action = actions[name];
-                        const clip = action.getClip();
                         action.paused = true;
-                        action.time = clip.duration * progress;
-                        mixer.update(0);
-                    }
-                };
-
-                window.setAnimationTime = function(name, time) {
-                    if (actions[name]) {
-                        const action = actions[name];
-                        action.paused = true;
-                        action.time = time;
+                        action.time = action.getClip().duration * progress;
                         mixer.update(0);
                     }
                 };
@@ -121,14 +108,21 @@
             lastLoadedPath = path;
             enableBoundaries = be === true || be === 'true';
 
-            if (bg === 'transparent') { scene.background = null; renderer.setClearColor(0x000000, 0); }
-            else { scene.background = new THREE.Color(bg || '#f0f0f0'); renderer.setClearColor(scene.background, 1); }
+            // Background handling
+            if (bg === 'transparent' || bg === '#00000000') {
+                scene.background = null;
+                renderer.setClearColor(0x000000, 0);
+            } else {
+                scene.background = new THREE.Color(bg || '#f0f0f0');
+                renderer.setClearColor(scene.background, 1);
+            }
 
+            // Controls config
             controls.enableZoom = ze === true || ze === 'true';
             controls.enableRotate = re === true || re === 'true';
             controls.enablePan = pe === true || pe === 'true';
 
-            // Apply rotation limits
+            // Rotation limits
             controls.minPolarAngle = (minP && minP !== "null") ? parseFloat(minP) : 0;
             controls.maxPolarAngle = (maxP && maxP !== "null") ? parseFloat(maxP) : Math.PI;
             controls.minAzimuthalAngle = (minA && minA !== "null") ? parseFloat(minA) : -Infinity;
@@ -162,9 +156,13 @@
                 const center = box.getCenter(new THREE.Vector3());
                 const size = box.getSize(new THREE.Vector3());
                 const maxDim = Math.max(size.x, size.y, size.z);
-                const fov = camera.fov * (Math.PI / 180);
-                const baseDist = maxDim / (2 * Math.atan(fov / 2));
-                const zFactor = parseFloat(zoom) || 1.0;
+                const baseDist = maxDim / (2 * Math.atan(camera.fov * Math.PI / 360));
+
+                // Clamp initial zoom to min/max range
+                const finalMinZoom = parseFloat(minz) || 0.5;
+                const finalMaxZoom = parseFloat(maxz) || 5.0;
+                let zFactor = parseFloat(zoom) || 1.0;
+                zFactor = THREE.MathUtils.clamp(zFactor, finalMinZoom, finalMaxZoom);
 
                 if (tp && tp !== "null") {
                     const t = tp.split(','); controls.target.set(parseFloat(t[0]), parseFloat(t[1]), parseFloat(t[2]));
@@ -175,12 +173,10 @@
                 if (cp && cp !== "null") {
                     const c = cp.split(',');
                     const pos = new THREE.Vector3(parseFloat(c[0]), parseFloat(c[1]), parseFloat(c[2]));
-
-                    // If zoom is not 1.0, scale the distance from target to camera
                     if (zFactor !== 1.0) {
-                        const direction = new THREE.Vector3().subVectors(pos, controls.target);
-                        direction.multiplyScalar(1.0 / zFactor);
-                        camera.position.copy(controls.target).add(direction);
+                        const dir = new THREE.Vector3().subVectors(pos, controls.target);
+                        dir.multiplyScalar(1.0 / zFactor);
+                        camera.position.copy(controls.target).add(dir);
                     } else {
                         camera.position.copy(pos);
                     }
@@ -188,17 +184,18 @@
                     camera.position.set(center.x, center.y, center.z + (baseDist * 1.5 / zFactor));
                 }
 
-                // APPLY ZOOM LIMITS relative to base distance
-                const finalMinZoom = parseFloat(minz) || 0.1;
-                const finalMaxZoom = parseFloat(maxz) || 10.0;
-                controls.maxDistance = (baseDist * 10.0) / finalMinZoom;
-                controls.minDistance = (baseDist * 0.1) / finalMaxZoom;
+                // APPLY ZOOM LIMITS relative to default distance (baseDist * 1.5)
+                const defaultDistance = baseDist * 1.5;
+                controls.maxDistance = defaultDistance / finalMinZoom; // How far away
+                controls.minDistance = defaultDistance / finalMaxZoom; // How close
 
                 camera.lookAt(controls.target);
                 controls.update();
                 isLoading = false;
                 document.getElementById('loading').style.display = 'none';
-                if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onLoadComplete');
+                if (window.flutter_inappwebview) {
+                    requestAnimationFrame(() => window.flutter_inappwebview.callHandler('onLoadComplete'));
+                }
             }, undefined, (e) => {
                 isLoading = false;
                 document.getElementById('loading').style.display = 'none';

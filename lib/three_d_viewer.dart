@@ -38,6 +38,43 @@ class ThreeDRotationLimits {
   double? get maxAzimuthalRad => _toRad(maxAzimuthalAngle);
 }
 
+class ThreeDZoomConfig {
+  /// The starting zoom level. 1.0 is standard fit.
+  final double initialZoom;
+
+  /// Minimum zoom-out level (e.g. 0.5 allows zooming out to half size).
+  final double minZoom;
+
+  /// Maximum zoom-in level (e.g. 5.0 allows zooming in 5x closer).
+  final double maxZoom;
+
+  /// Whether pinch-to-zoom is enabled.
+  final bool enableZoom;
+
+  const ThreeDZoomConfig({
+    this.initialZoom = 1.0,
+    this.minZoom = 0.5,
+    this.maxZoom = 5.0,
+    this.enableZoom = true,
+  }) : assert(initialZoom >= minZoom && initialZoom <= maxZoom,
+            'initialZoom must be between minZoom and maxZoom');
+
+  /// Creates a copy of this config but with the given fields replaced with the new values.
+  ThreeDZoomConfig copyWith({
+    double? initialZoom,
+    double? minZoom,
+    double? maxZoom,
+    bool? enableZoom,
+  }) {
+    return ThreeDZoomConfig(
+      initialZoom: initialZoom ?? this.initialZoom,
+      minZoom: minZoom ?? this.minZoom,
+      maxZoom: maxZoom ?? this.maxZoom,
+      enableZoom: enableZoom ?? this.enableZoom,
+    );
+  }
+}
+
 class ThreeDViewerController {
   _ThreeDViewerState? _state;
 
@@ -57,10 +94,7 @@ class ThreeDViewerController {
 class ThreeDViewer extends StatefulWidget {
   final String assetPath;
   final Color backgroundColor;
-  final double initialZoom;
-  final double minZoom;
-  final double maxZoom;
-  final bool enableZoom;
+  final ThreeDZoomConfig zoomConfig;
   final bool enableRotate;
   final bool enablePan;
   final bool enableBoundaries;
@@ -76,12 +110,9 @@ class ThreeDViewer extends StatefulWidget {
     super.key,
     required this.assetPath,
     this.backgroundColor = const Color(0xFFF0F0F0),
-    this.initialZoom = 1.0,
-    this.minZoom = 0.5,
-    this.maxZoom = 5.0,
-    this.enableZoom = true,
+    this.zoomConfig = const ThreeDZoomConfig(),
     this.enableRotate = true,
-    this.enablePan = true,
+    this.enablePan = false,
     this.enableBoundaries = true,
     this.rotationLimits,
     this.initialCameraPosition,
@@ -155,12 +186,12 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
     final String config = [
       path,
       hexColor,
-      widget.initialZoom,
+      widget.zoomConfig.initialZoom,
       widget.autoPlay,
-      widget.minZoom,
-      widget.maxZoom,
+      widget.zoomConfig.minZoom,
+      widget.zoomConfig.maxZoom,
       widget.enableBoundaries,
-      widget.enableZoom,
+      widget.zoomConfig.enableZoom,
       widget.enableRotate,
       widget.enablePan,
       widget.customLoader == null, // showNativeLoader
@@ -253,7 +284,7 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
     String targetPosStr = widget.initialTargetPosition?.join(',') ?? "null";
 
     webViewController?.evaluateJavascript(
-      source: "if(window.loadModelWithConfig) window.loadModelWithConfig('$path', '$hexColor', ${widget.initialZoom}, ${widget.enableZoom}, ${widget.autoPlay}, '$cameraPosStr', '$targetPosStr', ${widget.enableRotate}, ${widget.enablePan}, ${widget.customLoader == null}, ${widget.minZoom}, ${widget.maxZoom}, ${widget.enableBoundaries}, '${widget.rotationLimits?.minPolarRad ?? "null"}', '${widget.rotationLimits?.maxPolarRad ?? "null"}', '${widget.rotationLimits?.minAzimuthalRad ?? "null"}', '${widget.rotationLimits?.maxAzimuthalRad ?? "null"}');",
+      source: "if(window.loadModelWithConfig) window.loadModelWithConfig('$path', '$hexColor', ${widget.zoomConfig.initialZoom}, ${widget.zoomConfig.enableZoom}, ${widget.autoPlay}, '$cameraPosStr', '$targetPosStr', ${widget.enableRotate}, ${widget.enablePan}, ${widget.customLoader == null}, ${widget.zoomConfig.minZoom}, ${widget.zoomConfig.maxZoom}, ${widget.enableBoundaries}, '${widget.rotationLimits?.minPolarRad ?? "null"}', '${widget.rotationLimits?.maxPolarRad ?? "null"}', '${widget.rotationLimits?.minAzimuthalRad ?? "null"}', '${widget.rotationLimits?.maxAzimuthalRad ?? "null"}');",
     );
   }
 }
