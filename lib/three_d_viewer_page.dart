@@ -34,6 +34,7 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.modelPath.split('/').last),
+        elevation: 0,
         actions: [
           if (_animations.isNotEmpty)
             IconButton(
@@ -47,72 +48,147 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
             ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ThreeDViewer(
-              controller: _controller,
-              assetPath: widget.modelPath,
-              backgroundColor: Colors.transparent,
-              initialZoom: widget.initialZoom,
-              autoPlay: widget.autoPlay,
-              customLoader: const Center(
-                child: CircularProgressIndicator(),
-              ),
-              onAnimationsLoaded: (animations) {
-                setState(() {
-                  _animations = animations;
-                  for (var anim in animations) {
-                    _animationProgress[anim.name] = 0.0;
-                  }
-                });
-              },
-            ),
-          ),
-          if (_animations.isNotEmpty)
-            Container(
-              height: 200,
-              padding: const EdgeInsets.all(16),
-              color: Colors.white,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Animations Control",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return Column(
+            children: [
+              Expanded(
+                child: ThreeDViewer(
+                  controller: _controller,
+                  assetPath: widget.modelPath,
+                  backgroundColor: Colors.transparent,
+                  initialZoom: widget.initialZoom,
+                  autoPlay: widget.autoPlay,
+                  customLoader: const Center(
+                    child: CircularProgressIndicator(),
                   ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: _animations.length,
-                      itemBuilder: (context, index) {
-                        final anim = _animations[index];
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(anim.name,
-                                style: const TextStyle(
-                                    fontSize: 12, fontWeight: FontWeight.w500)),
-                            Slider(
-                              value: _animationProgress[anim.name] ?? 0.0,
-                              onChanged: (value) {
-                                setState(() {
-                                  _animationProgress[anim.name] = value;
-                                  _isPlaying = false;
-                                });
-                                _controller.setAnimationProgress(
-                                    anim.name, value);
-                              },
-                            ),
-                          ],
-                        );
-                      },
+                  onAnimationsLoaded: (animations) {
+                    setState(() {
+                      _animations = animations;
+                      for (var anim in animations) {
+                        _animationProgress[anim.name] = 0.0;
+                      }
+                    });
+                  },
+                ),
+              ),
+              if (_animations.isNotEmpty)
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: constraints.maxHeight * 0.45, // Dynamic height capped at 45%
+                  ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, -5),
+                        ),
+                      ],
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(24),
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Drag handle visual
+                        Container(
+                          margin: const EdgeInsets.only(top: 12),
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                "Animation Layers",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  "${_animations.length}",
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Flexible(
+                          child: ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                            shrinkWrap: true,
+                            itemCount: _animations.length,
+                            itemBuilder: (context, index) {
+                              final anim = _animations[index];
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      anim.name,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.grey[700],
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    SliderTheme(
+                                      data: SliderTheme.of(context).copyWith(
+                                        trackHeight: 4,
+                                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                                        overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+                                        activeTrackColor: Colors.blue,
+                                        inactiveTrackColor: Colors.blue.withOpacity(0.1),
+                                        thumbColor: Colors.blue,
+                                      ),
+                                      child: Slider(
+                                        value: _animationProgress[anim.name] ?? 0.0,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _animationProgress[anim.name] = value;
+                                            _isPlaying = false;
+                                          });
+                                          _controller.setAnimationProgress(anim.name, value);
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
-        ],
+                ),
+            ],
+          );
+        },
       ),
     );
   }
