@@ -121,11 +121,31 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    String path = widget.assetPath;
+    final bool isRemote = path.startsWith('http://') || path.startsWith('https://');
+    
+    if (!isRemote) {
+      if (!path.startsWith('/')) {
+        path = "/$path";
+      }
+      path = "http://127.0.0.1:8080$path";
+    }
+
+    String hexColor;
+    if (widget.backgroundColor == Colors.transparent) {
+      hexColor = 'transparent';
+    } else {
+      hexColor = '#${widget.backgroundColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
+    }
+
+    // Passing config via Hash Fragment for instant startup
+    final String initialUrl = "http://127.0.0.1:8080/assets/web_viewer/index.html#$path|$hexColor|${widget.initialZoom}|${widget.autoPlay}|${widget.minZoom}|${widget.maxZoom}|${widget.enableBoundaries}|${widget.enableZoom}|${widget.enableRotate}|${widget.enablePan}";
+
     return Stack(
       children: [
         InAppWebView(
           initialUrlRequest: URLRequest(
-            url: WebUri("http://127.0.0.1:8080/assets/index.html"),
+            url: WebUri(initialUrl),
           ),
           initialSettings: InAppWebViewSettings(
             allowFileAccessFromFileURLs: true,
@@ -135,15 +155,11 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
             useWideViewPort: true,
             loadWithOverviewMode: true,
             supportZoom: false,
-            cacheEnabled: false,
+            cacheEnabled: true, // Enable cache for faster startup
             disableContextMenu: true,
           ),
           onWebViewCreated: (controller) {
             webViewController = controller;
-            controller.addJavaScriptHandler(
-              handlerName: 'onViewerReady',
-              callback: (args) => _sendModelData(),
-            );
             controller.addJavaScriptHandler(
               handlerName: 'onLoadStart',
               callback: (args) => setState(() => isLoadingModel = true),
@@ -170,9 +186,6 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
           onConsoleMessage: (controller, consoleMessage) {
             debugPrint("3D JS: ${consoleMessage.message}");
           },
-          onLoadStop: (controller, url) {
-            _sendModelData();
-          },
         ),
         if (isLoadingModel && widget.customLoader != null)
           Positioned.fill(child: widget.customLoader!),
@@ -187,9 +200,13 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
     final bool isRemote = path.startsWith('http://') || path.startsWith('https://');
     
     if (!isRemote) {
+      // Local assets are served from http://127.0.0.1:8080/
+      // Since index.html is at /assets/web_viewer/index.html,
+      // a model at /assets/animation/girl.glb is at "../../animation/girl.glb" relative to index.html
       if (!path.startsWith('/')) {
         path = "/$path";
       }
+      // Use absolute path for the localhost server to avoid confusion
       path = "http://127.0.0.1:8080$path";
     }
 

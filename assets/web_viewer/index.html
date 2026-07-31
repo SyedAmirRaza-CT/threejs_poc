@@ -52,8 +52,8 @@
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+                "three": "./three.module.js",
+                "three/addons/": "./jsm/"
             }
         }
     </script>
@@ -75,9 +75,31 @@
         animate();
 
         function init() {
+            // Parse data from URL hash (#path|color|zoom|autoplay|minZ|maxZ|boundaries|enableZoom|rotate|pan)
+            const hash = decodeURIComponent(window.location.hash.substring(1));
+            const parts = hash.split('|');
+
+            const modelPath = parts[0];
+            const bgColor = parts[1];
+            const initialZoom = parseFloat(parts[2] || "1.0");
+            const autoPlay = parts[3] === 'true';
+            const minZoom = parseFloat(parts[4] || "0.5");
+            const maxZoom = parseFloat(parts[5] || "10.0");
+            const boundariesEnabled = parts[6] === 'true';
+            const zoomEnabled = parts[7] === 'true';
+            const rotateEnabled = parts[8] === 'true';
+            const panEnabled = parts[9] === 'true';
+
             clock = new THREE.Clock();
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xf0f0f0);
+
+            if (bgColor) {
+                if (bgColor === 'transparent') {
+                    scene.background = null;
+                } else {
+                    scene.background = new THREE.Color(bgColor);
+                }
+            }
 
             camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 5000);
             camera.position.set(0, 1.6, 5);
@@ -88,25 +110,31 @@
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+            if (bgColor === 'transparent') {
+                renderer.setClearColor(0x000000, 0);
+            } else if (bgColor) {
+                renderer.setClearColor(bgColor, 1);
+            }
+
             document.body.appendChild(renderer.domElement);
 
             controls = new OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
             controls.dampingFactor = 0.05;
+            controls.enableZoom = zoomEnabled;
+            controls.enableRotate = rotateEnabled;
+            controls.enablePan = panEnabled;
 
-            // Add boundaries to panning so model doesn't disappear
+            // Boundaries logic
             controls.addEventListener('change', () => {
                 if (!currentModel || !enableBoundaries) return;
-
                 const box = new THREE.Box3().setFromObject(currentModel);
                 const size = box.getSize(new THREE.Vector3());
                 const center = box.getCenter(new THREE.Vector3());
-
-                // Allow panning only within 1.5x the size of the model
                 const limitX = size.x * 1.5;
                 const limitY = size.y * 1.5;
                 const limitZ = size.z * 1.5;
-
                 controls.target.x = THREE.MathUtils.clamp(controls.target.x, center.x - limitX, center.x + limitX);
                 controls.target.y = THREE.MathUtils.clamp(controls.target.y, center.y - limitY, center.y + limitY);
                 controls.target.z = THREE.MathUtils.clamp(controls.target.z, center.z - limitZ, center.z + limitZ);
@@ -123,28 +151,33 @@
 
             window.addEventListener('resize', onWindowResize, false);
 
-            window.loadModelWithConfig = function(modelPath, bgColor, initialZoom, enableZoom, autoPlay, cameraPos, targetPos, enableRotate, enablePan, showNativeLoader, minZoom, maxZoom, boundariesEnabled) {
-                if (isLoading || lastLoadedPath === modelPath) return;
+            // Start loading immediately if path exists
+            if (modelPath) {
+                loadModelWithConfig(modelPath, bgColor, initialZoom, zoomEnabled, autoPlay, null, null, rotateEnabled, panEnabled, true, minZoom, maxZoom, boundariesEnabled);
+            }
+
+            window.loadModelWithConfig = function(path, bg, zoom, zoomEnabled, play, camPos, targetPos, rotateEnabled, panEnabled, nativeLoader, minZ, maxZ, boundEnabled) {
+                if (isLoading || (lastLoadedPath === path && path !== "")) return;
 
                 isLoading = true;
-                lastLoadedPath = modelPath;
-                enableBoundaries = (boundariesEnabled !== undefined) ? boundariesEnabled : true;
+                lastLoadedPath = path;
+                enableBoundaries = (boundEnabled !== undefined) ? boundEnabled : true;
 
-                if (bgColor) {
-                    if (bgColor === 'transparent' || bgColor === '#00000000') {
+                if (bg) {
+                    if (bg === 'transparent' || bg === '#00000000') {
                         scene.background = null;
                         renderer.setClearColor(0x000000, 0);
                         document.body.style.backgroundColor = 'transparent';
                     } else {
-                        scene.background = new THREE.Color(bgColor);
-                        document.body.style.backgroundColor = bgColor;
-                        renderer.setClearColor(bgColor, 1);
+                        scene.background = new THREE.Color(bg);
+                        document.body.style.backgroundColor = bg;
+                        renderer.setClearColor(bg, 1);
                     }
                 }
 
-                controls.enableZoom = (enableZoom !== undefined) ? enableZoom : true;
-                controls.enableRotate = (enableRotate !== undefined) ? enableRotate : true;
-                controls.enablePan = (enablePan !== undefined) ? enablePan : true;
+                controls.enableZoom = (zoomEnabled !== undefined) ? zoomEnabled : true;
+                controls.enableRotate = (rotateEnabled !== undefined) ? rotateEnabled : true;
+                controls.enablePan = (panEnabled !== undefined) ? panEnabled : true;
 
                 if (currentModel) {
                     scene.remove(currentModel);
@@ -162,7 +195,7 @@
                     actions = {};
                 }
 
-                if (showNativeLoader) {
+                if (nativeLoader) {
                     document.getElementById('loading').style.display = 'flex';
                 }
 
@@ -170,7 +203,7 @@
                     window.flutter_inappwebview.callHandler('onLoadStart');
                 }
 
-                loader.load(modelPath, function (gltf) {
+                loader.load(path, function (gltf) {
                     currentModel = gltf.scene;
                     currentModel.traverse(function (object) {
                         if (object.isMesh) {
@@ -189,7 +222,7 @@
                             const action = mixer.clipAction(clip);
                             actions[clip.name] = action;
                             action.play();
-                            if (!autoPlay) action.paused = true;
+                            if (!play) action.paused = true;
                             return { name: clip.name, duration: clip.duration };
                         });
                         if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onAnimationsLoaded', animationList);
@@ -205,10 +238,10 @@
                     const fitWidthDistance = fitHeightDistance / camera.aspect;
                     const baseDistance = Math.max(fitHeightDistance, fitWidthDistance);
 
-                    if (cameraPos && cameraPos.x !== undefined) {
-                        camera.position.set(cameraPos.x, cameraPos.y, cameraPos.z);
+                    if (camPos && camPos.x !== undefined) {
+                        camera.position.set(camPos.x, camPos.y, camPos.z);
                     } else {
-                        const zoomFactor = (initialZoom || 1.0);
+                        const zoomFactor = (zoom || 1.0);
                         const distance = (1.2 / zoomFactor) * baseDistance;
                         camera.position.copy(center);
                         camera.position.z += distance;
@@ -221,14 +254,14 @@
                     }
 
                     // Set zoom limits
-                    if (minZoom !== undefined && minZoom !== null) {
-                        controls.maxDistance = baseDistance * (2.0 / minZoom);
+                    if (minZ !== undefined && minZ !== null) {
+                        controls.maxDistance = baseDistance * (2.0 / minZ);
                     } else {
                         controls.maxDistance = 5000;
                     }
 
-                    if (maxZoom !== undefined && maxZoom !== null) {
-                        controls.minDistance = baseDistance * (0.1 / maxZoom);
+                    if (maxZ !== undefined && maxZ !== null) {
+                        controls.minDistance = baseDistance * (0.1 / maxZ);
                     } else {
                         controls.minDistance = 0.01;
                     }
@@ -243,7 +276,7 @@
                 }, (xhr) => {
                     if (xhr.lengthComputable) {
                         const percent = Math.round(xhr.loaded / xhr.total * 100);
-                        if (showNativeLoader) {
+                        if (nativeLoader) {
                             document.getElementById('loading-text').innerText = "Loading: " + percent + "%";
                         }
                         if (window.flutter_inappwebview) {
