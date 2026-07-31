@@ -67,6 +67,7 @@
         let actions = {};
         let isLoading = false;
         let lastLoadedPath = "";
+        let enableBoundaries = true;
 
         const loader = new GLTFLoader();
 
@@ -93,6 +94,24 @@
             controls.enableDamping = true;
             controls.dampingFactor = 0.05;
 
+            // Add boundaries to panning so model doesn't disappear
+            controls.addEventListener('change', () => {
+                if (!currentModel || !enableBoundaries) return;
+
+                const box = new THREE.Box3().setFromObject(currentModel);
+                const size = box.getSize(new THREE.Vector3());
+                const center = box.getCenter(new THREE.Vector3());
+
+                // Allow panning only within 1.5x the size of the model
+                const limitX = size.x * 1.5;
+                const limitY = size.y * 1.5;
+                const limitZ = size.z * 1.5;
+
+                controls.target.x = THREE.MathUtils.clamp(controls.target.x, center.x - limitX, center.x + limitX);
+                controls.target.y = THREE.MathUtils.clamp(controls.target.y, center.y - limitY, center.y + limitY);
+                controls.target.z = THREE.MathUtils.clamp(controls.target.z, center.z - limitZ, center.z + limitZ);
+            });
+
             const ambientLight = new THREE.AmbientLight(0xffffff, 2);
             scene.add(ambientLight);
 
@@ -104,11 +123,12 @@
 
             window.addEventListener('resize', onWindowResize, false);
 
-            window.loadModelWithConfig = function(modelPath, bgColor, initialZoom, enableZoom, autoPlay, cameraPos, targetPos, enableRotate, enablePan, showNativeLoader, minZoom, maxZoom) {
+            window.loadModelWithConfig = function(modelPath, bgColor, initialZoom, enableZoom, autoPlay, cameraPos, targetPos, enableRotate, enablePan, showNativeLoader, minZoom, maxZoom, boundariesEnabled) {
                 if (isLoading || lastLoadedPath === modelPath) return;
 
                 isLoading = true;
                 lastLoadedPath = modelPath;
+                enableBoundaries = (boundariesEnabled !== undefined) ? boundariesEnabled : true;
 
                 if (bgColor) {
                     if (bgColor === 'transparent' || bgColor === '#00000000') {

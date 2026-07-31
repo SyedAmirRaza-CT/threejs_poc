@@ -40,6 +40,7 @@ class ThreeDViewer extends StatefulWidget {
   final bool enableZoom;
   final bool enableRotate;
   final bool enablePan;
+  final bool enableBoundaries;
   final List<double>? initialCameraPosition;
   final List<double>? initialTargetPosition;
   final bool autoPlay;
@@ -57,6 +58,7 @@ class ThreeDViewer extends StatefulWidget {
     this.enableZoom = true,
     this.enableRotate = true,
     this.enablePan = true,
+    this.enableBoundaries = true,
     this.initialCameraPosition,
     this.initialTargetPosition,
     this.autoPlay = true,
@@ -212,7 +214,7 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
     bool showNativeLoader = widget.customLoader == null;
 
     webViewController?.evaluateJavascript(
-      source: "if(window.loadModelWithConfig) window.loadModelWithConfig('$path', '$hexColor', ${widget.initialZoom}, ${widget.enableZoom}, ${widget.autoPlay}, $cameraPosJs, $targetPosJs, ${widget.enableRotate}, ${widget.enablePan}, $showNativeLoader, ${widget.minZoom}, ${widget.maxZoom});",
+      source: "if(window.loadModelWithConfig) window.loadModelWithConfig('$path', '$hexColor', ${widget.initialZoom}, ${widget.enableZoom}, ${widget.autoPlay}, $cameraPosJs, $targetPosJs, ${widget.enableRotate}, ${widget.enablePan}, $showNativeLoader, ${widget.minZoom}, ${widget.maxZoom}, ${widget.enableBoundaries});",
     );
   }
 }
