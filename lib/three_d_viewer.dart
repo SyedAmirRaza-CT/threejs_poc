@@ -35,6 +35,8 @@ class ThreeDViewer extends StatefulWidget {
   final String assetPath;
   final Color backgroundColor;
   final double initialZoom;
+  final double minZoom;
+  final double maxZoom;
   final bool enableZoom;
   final bool enableRotate;
   final bool enablePan;
@@ -50,6 +52,8 @@ class ThreeDViewer extends StatefulWidget {
     required this.assetPath,
     this.backgroundColor = const Color(0xFFF0F0F0),
     this.initialZoom = 1.0,
+    this.minZoom = 0.5,
+    this.maxZoom = 10.0,
     this.enableZoom = true,
     this.enableRotate = true,
     this.enablePan = true,
@@ -208,7 +212,7 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
     bool showNativeLoader = widget.customLoader == null;
 
     webViewController?.evaluateJavascript(
-      source: "if(window.loadModelWithConfig) window.loadModelWithConfig('$path', '$hexColor', ${widget.initialZoom}, ${widget.enableZoom}, ${widget.autoPlay}, $cameraPosJs, $targetPosJs, ${widget.enableRotate}, ${widget.enablePan}, $showNativeLoader);",
+      source: "if(window.loadModelWithConfig) window.loadModelWithConfig('$path', '$hexColor', ${widget.initialZoom}, ${widget.enableZoom}, ${widget.autoPlay}, $cameraPosJs, $targetPosJs, ${widget.enableRotate}, ${widget.enablePan}, $showNativeLoader, ${widget.minZoom}, ${widget.maxZoom});",
     );
   }
 }

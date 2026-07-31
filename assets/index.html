@@ -104,7 +104,7 @@
 
             window.addEventListener('resize', onWindowResize, false);
 
-            window.loadModelWithConfig = function(modelPath, bgColor, initialZoom, enableZoom, autoPlay, cameraPos, targetPos, enableRotate, enablePan, showNativeLoader) {
+            window.loadModelWithConfig = function(modelPath, bgColor, initialZoom, enableZoom, autoPlay, cameraPos, targetPos, enableRotate, enablePan, showNativeLoader, minZoom, maxZoom) {
                 if (isLoading || lastLoadedPath === modelPath) return;
 
                 isLoading = true;
@@ -180,13 +180,16 @@
                     const center = box.getCenter(new THREE.Vector3());
                     const maxSize = Math.max(size.x, size.y, size.z);
 
+                    // Base distance for framing
+                    const fitHeightDistance = maxSize / (2 * Math.atan(Math.PI * camera.fov / 360));
+                    const fitWidthDistance = fitHeightDistance / camera.aspect;
+                    const baseDistance = Math.max(fitHeightDistance, fitWidthDistance);
+
                     if (cameraPos && cameraPos.x !== undefined) {
                         camera.position.set(cameraPos.x, cameraPos.y, cameraPos.z);
                     } else {
-                        const fitHeightDistance = maxSize / (2 * Math.atan(Math.PI * camera.fov / 360));
-                        const fitWidthDistance = fitHeightDistance / camera.aspect;
                         const zoomFactor = (initialZoom || 1.0);
-                        const distance = (1.2 / zoomFactor) * Math.max(fitHeightDistance, fitWidthDistance);
+                        const distance = (1.2 / zoomFactor) * baseDistance;
                         camera.position.copy(center);
                         camera.position.z += distance;
                     }
@@ -195,6 +198,19 @@
                         controls.target.set(targetPos.x, targetPos.y, targetPos.z);
                     } else {
                         controls.target.copy(center);
+                    }
+
+                    // Set zoom limits
+                    if (minZoom !== undefined && minZoom !== null) {
+                        controls.maxDistance = baseDistance * (2.0 / minZoom);
+                    } else {
+                        controls.maxDistance = 5000;
+                    }
+
+                    if (maxZoom !== undefined && maxZoom !== null) {
+                        controls.minDistance = baseDistance * (0.1 / maxZoom);
+                    } else {
+                        controls.minDistance = 0.01;
                     }
 
                     camera.lookAt(controls.target);
