@@ -58,19 +58,22 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
             children: [
               Expanded(
                 child: ThreeDViewer(
+                  rotationLimits: ThreeDRotationLimits(
+                    minVerticalAngle: 80,
+                    maxVerticalAngle: 120,
+                    minHorizontalAngle: -30,
+                    maxHorizontalAngle: 30
+
+                  ),
                   zoomConfig: ThreeDZoomConfig(
                     initialZoom: widget.initialZoom,
+                    minZoom: 0.1,
+                    enableZoom: false
                   ),
                   controller: _controller,
                   assetPath: widget.modelPath,
                   backgroundColor: Colors.transparent,
                   autoPlay: widget.autoPlay,
-                  // rotationLimits: ThreeDRotationLimits(
-                  //   maxPolarAngle: 100,
-                  //   minPolarAngle: 80,
-                  //   maxAzimuthalAngle: 145,
-                  //   minAzimuthalAngle: 90
-                  // ),
                   initialCameraPosition: widget.initialCameraPosition,
                   initialTargetPosition: widget.initialTargetPosition,
                   customLoader: const Center(

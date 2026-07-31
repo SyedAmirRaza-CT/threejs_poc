@@ -90,7 +90,7 @@ class DashboardPage extends StatelessWidget {
             MaterialPageRoute(
               // UniqueKey ensures a completely new WebView instance is created
               builder: (context) => ThreeDViewerPage(
-                key: UniqueKey(), 
+                key: UniqueKey(),
                 modelPath: path,
                 initialZoom: zoom,
                 autoPlay: autoPlay,
