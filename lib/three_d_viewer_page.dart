@@ -65,10 +65,14 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                   //   maxHorizontalAngle: 30
                   //
                   // ),
+                  showDebugHelpers: true,
+                  enablePan: false,
+                  autoCenter: true,
                   initialTargetPosition: widget.initialTargetPosition,
                   initialCameraPosition: widget.initialCameraPosition,
                   zoomConfig: ThreeDZoomConfig(
                     initialZoom: widget.initialZoom,
+                    enableZoom: true
                   ),
                   controller: _controller,
                   assetPath: widget.modelPath,

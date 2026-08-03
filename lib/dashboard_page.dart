@@ -48,9 +48,9 @@ class DashboardPage extends StatelessWidget {
               icon: Icons.biotech,
               color: Colors.redAccent,
               path: 'assets/animation/blood_vesel.glb',
-              zoom: 0.8, // Slightly zoomed in for better detail
-              autoPlay: false,
-              cameraPosition: [0,-120,0]
+              zoom: 0.8, // Zoomed in to see inside
+              autoPlay: true,
+                cameraPosition: [0,-120,0]
             ),
             const SizedBox(height: 20),
             _buildModelCard(
@@ -60,8 +60,8 @@ class DashboardPage extends StatelessWidget {
               color: Colors.blueGrey,
               path: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BrainStem/glTF-Binary/BrainStem.glb',
               zoom: 1.2,
-              targetPosition: [0,0.8,0],
               autoPlay: true,
+              targetPosition: [0,1,0,]
             ),
           ],
         ),

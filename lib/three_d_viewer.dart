@@ -5,15 +5,10 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 class ThreeDAnimation {
   final String name;
   final double duration;
-
   ThreeDAnimation({required this.name, required this.duration});
-
-  factory ThreeDAnimation.fromMap(Map map) {
-    return ThreeDAnimation(
+  factory ThreeDAnimation.fromMap(Map map) => ThreeDAnimation(
       name: map['name'] as String,
-      duration: (map['duration'] as num).toDouble(),
-    );
-  }
+      duration: (map['duration'] as num).toDouble());
 }
 
 class ThreeDRotationLimits {
@@ -21,26 +16,18 @@ class ThreeDRotationLimits {
   final double? maxVerticalAngle;
   final double? minHorizontalAngle;
   final double? maxHorizontalAngle;
-
-  const ThreeDRotationLimits({
-    this.minVerticalAngle,
-    this.maxVerticalAngle,
-    this.minHorizontalAngle,
-    this.maxHorizontalAngle,
-  });
+  const ThreeDRotationLimits({this.minVerticalAngle, this.maxVerticalAngle, this.minHorizontalAngle, this.maxHorizontalAngle});
+  double? _toRad(double? deg) => deg != null ? deg * (math.pi / 180.0) : null;
+  double? get minVerticalRad => _toRad(minVerticalAngle);
+  double? get maxVerticalRad => _toRad(maxVerticalAngle);
+  double? get minHorizontalRad => _toRad(minHorizontalAngle);
+  double? get maxHorizontalRad => _toRad(maxHorizontalAngle);
 }
 
 class ThreeDZoomConfig {
-  /// The starting zoom level. 1.0 is standard fit.
   final double initialZoom;
-
-  /// Minimum zoom-out level. If null, zoom-out is unrestricted.
   final double? minZoom;
-
-  /// Maximum zoom-in level. If null, zoom-in is unrestricted.
   final double? maxZoom;
-
-  /// Whether pinch-to-zoom is enabled.
   final bool enableZoom;
 
   const ThreeDZoomConfig({
@@ -48,10 +35,7 @@ class ThreeDZoomConfig {
     this.minZoom,
     this.maxZoom,
     this.enableZoom = true,
-  }) : assert(
-            (minZoom == null || initialZoom >= minZoom) &&
-                (maxZoom == null || initialZoom <= maxZoom),
-            'initialZoom ($initialZoom) must be between minZoom ($minZoom) and maxZoom ($maxZoom)');
+  });
 }
 
 class ThreeDViewerController {
@@ -67,9 +51,16 @@ class ThreeDViewer extends StatefulWidget {
   final bool enableRotate;
   final bool enablePan;
   final bool enableBoundaries;
+  final bool showDebugHelpers;
+  final bool autoCenter;
   final ThreeDRotationLimits? rotationLimits;
+
+  /// [HorizontalAngle (0-360), VerticalAngle (0-180), Distance (0 for Auto)]
   final List<double>? initialCameraPosition;
+
+  /// [X, Y, Z] - The point the camera looks at.
   final List<double>? initialTargetPosition;
+  
   final bool autoPlay;
   final ThreeDViewerController? controller;
   final Function(List<ThreeDAnimation> animations)? onAnimationsLoaded;
@@ -81,8 +72,10 @@ class ThreeDViewer extends StatefulWidget {
     this.backgroundColor = const Color(0xFFF0F0F0),
     this.zoomConfig = const ThreeDZoomConfig(),
     this.enableRotate = true,
-    this.enablePan = false,
+    this.enablePan = true,
     this.enableBoundaries = true,
+    this.showDebugHelpers = false,
+    this.autoCenter = false,
     this.rotationLimits,
     this.initialCameraPosition,
     this.initialTargetPosition,
@@ -118,7 +111,7 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
   }
 
   void _toggleAnimation(bool play) => webViewController?.evaluateJavascript(source: "window.toggleAnimation($play);");
-  void _setAnimationProgress(String name, double progress) => webViewController?.evaluateJavascript(source: "window.setAnimationProgress('$name', $progress);");
+  void _setAnimationProgress(String name, double p) => webViewController?.evaluateJavascript(source: "window.setAnimationProgress('$name', $p);");
 
   List<dynamic> _buildParams() {
     String path = widget.assetPath;
@@ -127,8 +120,8 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
       path = "http://127.0.0.1:8080$path";
     }
 
-    String hexColor = widget.backgroundColor == Colors.transparent
-        ? 'transparent'
+    String hexColor = widget.backgroundColor == Colors.transparent 
+        ? 'transparent' 
         : '#${widget.backgroundColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
 
     return [
@@ -145,10 +138,12 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
       widget.customLoader == null,              // 10
       widget.initialCameraPosition?.join(',') ?? "null", // 11
       widget.initialTargetPosition?.join(',') ?? "null", // 12
-      widget.rotationLimits?.minVerticalAngle ?? "null", // 13 (Degrees)
-      widget.rotationLimits?.maxVerticalAngle ?? "null", // 14 (Degrees)
-      widget.rotationLimits?.minHorizontalAngle ?? "null", // 15 (Degrees)
-      widget.rotationLimits?.maxHorizontalAngle ?? "null", // 16 (Degrees)
+      widget.rotationLimits?.minVerticalAngle ?? "null", // 13
+      widget.rotationLimits?.maxVerticalAngle ?? "null", // 14
+      widget.rotationLimits?.minHorizontalAngle ?? "null", // 15
+      widget.rotationLimits?.maxHorizontalAngle ?? "null", // 16
+      widget.showDebugHelpers,                            // 17
+      widget.autoCenter,                                  // 18
     ];
   }
 
@@ -167,7 +162,7 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
             javaScriptEnabled: true,
             transparentBackground: true,
             supportZoom: false,
-            cacheEnabled: true,
+            cacheEnabled: false,
             disableContextMenu: true,
           ),
           onWebViewCreated: (controller) {
@@ -178,7 +173,9 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
               await Future.delayed(const Duration(milliseconds: 200));
               if (mounted) setState(() => isLoadingModel = false);
             });
-            controller.addJavaScriptHandler(handlerName: 'onLoadError', callback: (args) => setState(() => isLoadingModel = false));
+            controller.addJavaScriptHandler(handlerName: 'onLoadError', callback: (args) {
+              if (mounted) setState(() => isLoadingModel = false);
+            });
             controller.addJavaScriptHandler(handlerName: 'onAnimationsLoaded', callback: (args) {
               final List<dynamic> anims = args[0] as List<dynamic>;
               widget.onAnimationsLoaded?.call(anims.map((e) => ThreeDAnimation.fromMap(e as Map)).toList());
