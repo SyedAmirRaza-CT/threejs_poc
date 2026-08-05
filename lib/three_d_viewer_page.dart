@@ -52,6 +52,11 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
             onPressed: () => _controller.launchAR(),
           ),
           IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Reset View',
+            onPressed: () => _controller.reset(),
+          ),
+          IconButton(
             icon: Icon(_isAutoRotating ? Icons.sync : Icons.sync_disabled),
             tooltip: 'Auto Rotate',
             onPressed: () {
@@ -128,7 +133,10 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                         content: Text("You double-tapped on: $name"),
                         actions: [
                           TextButton(
-                            onPressed: () => Navigator.pop(context),
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _controller.reset(); // Reset when closed
+                            },
                             child: const Text("Close"),
                           ),
                         ],

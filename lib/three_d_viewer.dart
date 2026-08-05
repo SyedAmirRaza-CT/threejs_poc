@@ -109,6 +109,7 @@ class ThreeDViewerController {
   void goToView(double h, double v, double d, {double durationMillis = 1000}) => _state?._goToView(h, v, d, durationMillis);
   void setMaterialColor(String meshName, Color color) => _state?._setMaterialColor(meshName, color);
   void launchAR() => _state?._launchAR();
+  void reset() => _state?._reset();
 }
 
 class ThreeDViewer extends StatefulWidget {
@@ -199,6 +200,7 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
     webViewController?.evaluateJavascript(source: "window.setMaterialColor('$name', '$hex');");
   }
   void _launchAR() => webViewController?.evaluateJavascript(source: "window.launchAR();");
+  void _reset() => webViewController?.evaluateJavascript(source: "window.resetToInitial();");
 
   List<dynamic> _buildParams() {
     String path = widget.assetPath;

@@ -217,6 +217,35 @@
                 window.setAutoRotate = (e, s) => { if (controls) { controls.autoRotate = e; if (s) controls.autoRotateSpeed = s; } };
                 window.setMaterialColor = (n, h) => { if (currentModel) currentModel.traverse(o => { if (o.isMesh && (o.name === n || n === "all")) o.material.color.set(h); }); };
 
+                window.resetToInitial = () => {
+                    if (!controls) return;
+
+                    const duration = 1000;
+                    const startTime = performance.now();
+
+                    // Clone initial states to avoid reference issues
+                    const startTarget = controls.target.clone();
+                    const startPos = camera.position.clone();
+
+                    // We need to calculate where the initial position was.
+                    // Instead of keeping complex state, we can re-derive it or use saved values.
+                    // I will add savedInitialPos and savedInitialTarget in loadModel.
+
+                    if (!window.savedInitialPos || !window.savedInitialTarget) return;
+
+                    function step() {
+                        const t = Math.min((performance.now() - startTime) / duration, 1);
+                        const ease = t * (2 - t);
+
+                        controls.target.lerpVectors(startTarget, window.savedInitialTarget, ease);
+                        camera.position.lerpVectors(startPos, window.savedInitialPos, ease);
+
+                        controls.update();
+                        if (t < 1) requestAnimationFrame(step);
+                    }
+                    requestAnimationFrame(step);
+                };
+
                 window.goToView = (yawDeg, pitchDeg, distance, duration) => {
                     if (!controls) return;
                     const targetDist = distance || baseStandardDist;
@@ -362,6 +391,10 @@
                     }
                     camera.lookAt(controls.target);
                     controls.update();
+
+                    // Save initial state for reset functionality
+                    window.savedInitialPos = camera.position.clone();
+                    window.savedInitialTarget = controls.target.clone();
 
                     controls.minPolarAngle = parseAngleDegrees(minP, 0);
                     controls.maxPolarAngle = parseAngleDegrees(maxP, Math.PI);
