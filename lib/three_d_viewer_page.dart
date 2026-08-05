@@ -7,6 +7,8 @@ class ThreeDViewerPage extends StatefulWidget {
   final bool autoPlay;
   final List<double>? initialCameraPosition;
   final List<double>? initialTargetPosition;
+  final List<ThreeDHotspot>? hotspots;
+  final ThreeDDebugConfig debugConfig;
 
   const ThreeDViewerPage({
     super.key,
@@ -15,6 +17,8 @@ class ThreeDViewerPage extends StatefulWidget {
     this.autoPlay = true,
     this.initialCameraPosition,
     this.initialTargetPosition,
+    this.hotspots,
+    this.debugConfig = const ThreeDDebugConfig(),
   });
 
   @override
@@ -24,6 +28,8 @@ class ThreeDViewerPage extends StatefulWidget {
 class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
   final ThreeDViewerController _controller = ThreeDViewerController();
   late bool _isPlaying;
+  bool _isAutoRotating = false;
+  bool _isClockwise = true;
   List<ThreeDAnimation> _animations = [];
   Map<String, double> _animationProgress = {};
 
@@ -40,6 +46,21 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
         title: Text(widget.modelPath.split('/').last),
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.view_in_ar),
+            tooltip: 'Launch AR',
+            onPressed: () => _controller.launchAR(),
+          ),
+          IconButton(
+            icon: Icon(_isAutoRotating ? Icons.sync : Icons.sync_disabled),
+            tooltip: 'Auto Rotate',
+            onPressed: () {
+              setState(() {
+                _isAutoRotating = !_isAutoRotating;
+              });
+              _controller.setAutoRotate(_isAutoRotating, speed: 2.0, clockwise: _isClockwise);
+            },
+          ),
           if (_animations.isNotEmpty)
             IconButton(
               icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
@@ -56,20 +77,66 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
         builder: (context, constraints) {
           return Column(
             children: [
+              // Test Controls for new features
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: Row(
+                  children: [
+                    ActionChip(
+                      label: const Text("Cinematic View"),
+                      onPressed: () => _controller.goToView(45, 45, 5, durationMillis: 2000),
+                    ),
+                    const SizedBox(width: 8),
+                    ActionChip(
+                      label: const Text("Tint Red"),
+                      onPressed: () => _controller.setMaterialColor("all", Colors.red.withOpacity(0.5)),
+                    ),
+                    const SizedBox(width: 8),
+                    ActionChip(
+                      label: const Text("Reset Color"),
+                      onPressed: () => _controller.setMaterialColor("all", Colors.white),
+                    ),
+                    const SizedBox(width: 8),
+                    ActionChip(
+                      label: Icon(_isClockwise ? Icons.rotate_right : Icons.rotate_left, size: 18),
+                      onPressed: () {
+                        setState(() => _isClockwise = !_isClockwise);
+                        if (_isAutoRotating) _controller.setAutoRotate(true, clockwise: _isClockwise);
+                      },
+                    ),
+                  ],
+                ),
+              ),
               Expanded(
                 child: ThreeDViewer(
-                  // rotationLimits: ThreeDRotationLimits(
-                  //   minVerticalAngle: 80,
-                  //   maxVerticalAngle: 120,
-                  //   minHorizontalAngle: -30,
-                  //   maxHorizontalAngle: 30
-                  //
-                  // ),
-                  showDebugHelpers: true,
-                  enablePan: false,
                   autoCenter: true,
                   initialTargetPosition: widget.initialTargetPosition,
                   initialCameraPosition: widget.initialCameraPosition,
+                  hotspots: widget.hotspots,
+                  onHotspotTapped: (id) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text("Hotspot Tapped: $id"),
+                      duration: const Duration(seconds: 1),
+                    ));
+                  },
+                  onObjectDoubleTapped: (name) {
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text("Part Selected"),
+                        content: Text("You double-tapped on: $name"),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text("Close"),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  enableDoubleTapZoom: true,
+                  enablePan: false,
                   zoomConfig: ThreeDZoomConfig(
                     initialZoom: widget.initialZoom,
                     enableZoom: true

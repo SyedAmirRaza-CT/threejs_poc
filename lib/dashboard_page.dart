@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'three_d_viewer_page.dart';
+import 'three_d_viewer.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -29,7 +30,23 @@ class DashboardPage extends StatelessWidget {
               color: Colors.pinkAccent,
               path: 'assets/animation/girl.glb',
               zoom: 0.3,
-              autoPlay: false, // Start girl paused
+              autoPlay: false,
+              hotspots: [
+                const ThreeDHotspot(
+                  id: 'eye_left',
+                  position: [-0.08, 0.6, 0.15],
+                  label: 'Left Eye',
+                  color: Colors.cyanAccent,
+                  size: 15.0,
+                ),
+                const ThreeDHotspot(
+                  id: 'eye_right',
+                  position: [0, 0.6, 0.15],
+                  label: 'Right Eye',
+                  color: Colors.cyanAccent,
+                  size: 15.0,
+                ),
+              ],
             ),
             const SizedBox(height: 20),
             _buildModelCard(
@@ -39,7 +56,12 @@ class DashboardPage extends StatelessWidget {
               color: Colors.orangeAccent,
               path: 'assets/animation/Fox.glb',
               zoom: 1.5,
-              autoPlay: true, // Start fox playing
+              autoPlay: true,
+              debugConfig: const ThreeDDebugConfig(
+                showGrid: true,
+                showCameraInfo: true,
+                showClickMarker: true,
+              ),
             ),
             const SizedBox(height: 20),
             _buildModelCard(
@@ -48,9 +70,9 @@ class DashboardPage extends StatelessWidget {
               icon: Icons.biotech,
               color: Colors.redAccent,
               path: 'assets/animation/blood_vesel.glb',
-              zoom: 0.8, // Zoomed in to see inside
+              zoom: 0.8,
               autoPlay: true,
-                cameraPosition: [0,-120,0]
+              cameraPosition: [0, -120, 0],
             ),
             const SizedBox(height: 20),
             _buildModelCard(
@@ -59,9 +81,12 @@ class DashboardPage extends StatelessWidget {
               icon: Icons.psychology,
               color: Colors.blueGrey,
               path: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BrainStem/glTF-Binary/BrainStem.glb',
-              zoom: 1.2,
+              zoom: 1.5,
               autoPlay: true,
-              targetPosition: [0,1,0,]
+              targetPosition: [0, 1, 0],
+              hotspots: [
+                const ThreeDHotspot(id: 'brain_core', position: [0, 1, 0], label: 'Main Core'),
+              ],
             ),
           ],
         ),
@@ -79,6 +104,8 @@ class DashboardPage extends StatelessWidget {
     bool autoPlay = true,
     List<double>? cameraPosition,
     List<double>? targetPosition,
+    List<ThreeDHotspot>? hotspots,
+    ThreeDDebugConfig debugConfig = const ThreeDDebugConfig(),
   }) {
     return Card(
       elevation: 4,
@@ -88,7 +115,6 @@ class DashboardPage extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              // UniqueKey ensures a completely new WebView instance is created
               builder: (context) => ThreeDViewerPage(
                 key: UniqueKey(),
                 modelPath: path,
@@ -96,6 +122,8 @@ class DashboardPage extends StatelessWidget {
                 autoPlay: autoPlay,
                 initialCameraPosition: cameraPosition,
                 initialTargetPosition: targetPosition,
+                hotspots: hotspots,
+                debugConfig: debugConfig,
               ),
             ),
           );
@@ -115,12 +143,14 @@ class DashboardPage extends StatelessWidget {
             children: [
               Icon(icon, size: 40, color: Colors.white),
               const SizedBox(width: 20),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 22,
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               const Spacer(),

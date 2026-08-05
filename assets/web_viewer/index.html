@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Three.js Viewer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Three.js Pro Viewer</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: transparent; -webkit-user-select: none; user-select: none; }
-        canvas { display: block; width: 100vw; height: 100vh; }
+        body { margin: 0; overflow: hidden; background-color: transparent; -webkit-user-select: none; user-select: none; touch-action: none; }
+        canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
         #loading {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             color: #333; font-family: sans-serif; text-align: center;
@@ -17,10 +17,27 @@
             border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .hotspot {
+            border-radius: 50%; background: #ffcc00;
+            border: 2px solid white; cursor: pointer; pointer-events: auto;
+            position: absolute; transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px rgba(0,0,0,0.5); z-index: 5;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        #debug-info {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(10, 10, 10, 0.95); color: #00ff00; padding: 14px; border-radius: 12px;
+            font-family: 'Courier New', monospace; font-size: 14px; font-weight: bold; pointer-events: none;
+            display: none; z-index: 9999; text-align: center; width: 85%; border: 2px solid #00ff00;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
     </style>
 </head>
 <body>
     <div id="loading"><div class="spinner"></div><p id="loading-text">Loading...</p></div>
+    <div id="debug-info"></div>
+    <div id="hotspot-container" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></div>
+
     <script type="importmap"> { "imports": { "three": "./three.module.js", "three/addons/": "./jsm/" } } </script>
     <script type="module">
         import * as THREE from 'three';
@@ -30,29 +47,41 @@
         let scene, camera, renderer, controls, currentModel, mixer, clock;
         let actions = {};
         let isLoading = false;
-        let lastLoadedPath = "";
+        let modelUrl = "";
         let enableBoundaries = true;
-        let fixedModelCenter = new THREE.Vector3(0,0,0);
-        let fixedModelSize = new THREE.Vector3(1,1,1);
+        let initCenter = new THREE.Vector3();
+        let initSize = new THREE.Vector3();
+        let baseStandardDist = 5;
 
-        let debugMarkerTarget, axesHelper, gridHelper;
+        // Debug Helpers
+        let debugMarkerTarget, debugMarkerModel, debugMarkerClick, axesHelper, gridHelper;
+        let hotspots = [];
+        let isAnimating = false;
+
+        // Configuration Flags
         let showHelpers = false;
+        let config_showGrid = false;
+        let config_showAxes = false;
+        let config_showTarget = false;
+        let config_showModel = false;
+        let config_showClick = false;
+        let config_showInfo = false;
+        let config_showHotspots = false;
+        let config_doubleTapZoom = false;
 
-        window.onerror = function(msg) {
-            console.error("Global JS Error:", msg);
-            if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onLoadError', msg);
-            return false;
-        };
+        // Gesture State
+        let tapCount = 0;
+        let tapTimer = null;
+        let lastTapPos = new THREE.Vector2();
+        let pointerDownPos = new THREE.Vector2();
 
+        window.onerror = (msg) => { if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onLoadError', msg); };
         const loader = new GLTFLoader();
 
-        // --- Helper Function ---
-        const parseAngleDegrees = (value, defaultValue) => {
-            if (value === null || value === undefined || value === "" || value === "null") return defaultValue;
-            const degrees = Number(value);
-            if (!Number.isFinite(degrees)) return defaultValue;
-            return THREE.MathUtils.degToRad(degrees);
-        };
+        const parseAngleDegrees = (v, d) => (v === null || v === undefined || v === "" || v === "null") ? d : THREE.MathUtils.degToRad(Number(v));
+
+        init();
+        animate();
 
         function init() {
             try {
@@ -61,7 +90,7 @@
                 camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 20000);
                 renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
                 renderer.setSize(window.innerWidth, window.innerHeight);
-                renderer.setPixelRatio(window.devicePixelRatio);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
                 renderer.shadowMap.enabled = true;
                 renderer.outputColorSpace = THREE.SRGBColorSpace;
                 document.body.appendChild(renderer.domElement);
@@ -69,9 +98,9 @@
                 controls = new OrbitControls(camera, renderer.domElement);
                 controls.enableDamping = true;
 
-                const ambientLight = new THREE.AmbientLight(0xffffff, 2.5);
+                const ambientLight = new THREE.AmbientLight(0xffffff, 2);
                 scene.add(ambientLight);
-                const dirLight = new THREE.DirectionalLight(0xffffff, 2);
+                const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
                 dirLight.position.set(5, 10, 7.5);
                 scene.add(dirLight);
 
@@ -81,80 +110,217 @@
                     renderer.setSize(window.innerWidth, window.innerHeight);
                 });
 
+                // --- INTEGRATED MULTI-DEVICE TAP ENGINE ---
+                const onPointerDown = (e) => {
+                    pointerDownPos.set(e.clientX, e.clientY);
+                };
+
+                const onPointerUp = (e) => {
+                    if (!currentModel) return;
+
+                    const upPos = new THREE.Vector2(e.clientX, e.clientY);
+                    const distMoved = pointerDownPos.distanceTo(upPos);
+
+                    if (distMoved > 25) { // Drag detected
+                        tapCount = 0;
+                        if (tapTimer) { clearTimeout(tapTimer); tapTimer = null; }
+                        return;
+                    }
+
+                    tapCount++;
+                    const distFromLastTap = upPos.distanceTo(lastTapPos);
+                    lastTapPos.copy(upPos);
+
+                    if (tapCount === 1) {
+                        tapTimer = setTimeout(() => {
+                            tapCount = 0;
+                            tapTimer = null;
+                        }, 400);
+                    } else if (tapCount >= 2 && distFromLastTap < 60) {
+                        // DOUBLE TAP DETECTED
+                        if (tapTimer) { clearTimeout(tapTimer); tapTimer = null; }
+                        tapCount = 0;
+
+                        const rect = renderer.domElement.getBoundingClientRect();
+                        const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                        const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                        const raycaster = new THREE.Raycaster();
+                        raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+
+                        currentModel.updateMatrixWorld(true);
+                        const intersects = raycaster.intersectObject(currentModel, true);
+
+                        if (intersects.length > 0) {
+                            const hit = intersects[0];
+                            const p = hit.point;
+                            const objectName = hit.object.name || "Unnamed Part";
+
+                            // Send to Flutter
+                            if (window.flutter_inappwebview) {
+                                window.flutter_inappwebview.callHandler('onObjectDoubleTapped', objectName);
+                            }
+
+                            // Zoom only if enabled
+                            if (config_doubleTapZoom && !isAnimating) {
+                                cinematicMoveTo(p, baseStandardDist * 0.2);
+                            }
+                        }
+                    }
+
+                    // --- DEBUG LOGIC (Single tap helpers) ---
+                    if (showHelpers && !isAnimating) {
+                        const rect = renderer.domElement.getBoundingClientRect();
+                        const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                        const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                        const raycaster = new THREE.Raycaster();
+                        raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+                        const intersects = raycaster.intersectObject(currentModel, true);
+                        if (intersects.length > 0) {
+                            const p = intersects[0].point;
+                            if (debugMarkerClick && config_showClick) { debugMarkerClick.position.copy(p); debugMarkerClick.visible = true; }
+                            if (config_showInfo) {
+                                const dbg = document.getElementById('debug-info');
+                                dbg.innerText = `COORD: [${p.x.toFixed(3)}, ${p.y.toFixed(3)}, ${p.z.toFixed(3)}]`;
+                                dbg.style.display = 'block';
+                            }
+                            if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onDebugPoint', { x: p.x, y: p.y, z: p.z });
+                        }
+                    }
+                };
+
+                renderer.domElement.addEventListener('pointerdown', onPointerDown, true);
+                renderer.domElement.addEventListener('pointerup', onPointerUp, true);
+
+                function cinematicMoveTo(point, distance) {
+                    isAnimating = true;
+                    const startTarget = controls.target.clone();
+                    const startPos = camera.position.clone();
+                    const direction = new THREE.Vector3().subVectors(startPos, startTarget).normalize();
+                    const endPos = point.clone().add(direction.multiplyScalar(distance));
+                    const startTime = performance.now();
+                    const duration = 800;
+                    function step() {
+                        const t = Math.min((performance.now() - startTime) / duration, 1);
+                        const ease = 1 - Math.pow(1 - t, 3);
+                        controls.target.lerpVectors(startTarget, point, ease);
+                        camera.position.lerpVectors(startPos, endPos, ease);
+                        controls.update();
+                        if (t < 1) requestAnimationFrame(step);
+                        else isAnimating = false;
+                    }
+                    requestAnimationFrame(step);
+                }
+
                 window.loadModelWithConfig = loadModel;
                 window.toggleAnimation = (p) => { if (mixer) for (let k in actions) actions[k].paused = !p; };
                 window.setAnimationProgress = (n, p) => { if (actions[n]) { actions[n].paused = true; actions[n].time = actions[n].getClip().duration * p; mixer.update(0); } };
+                window.setAutoRotate = (e, s) => { if (controls) { controls.autoRotate = e; if (s) controls.autoRotateSpeed = s; } };
+                window.setMaterialColor = (n, h) => { if (currentModel) currentModel.traverse(o => { if (o.isMesh && (o.name === n || n === "all")) o.material.color.set(h); }); };
 
-                const hash = decodeURIComponent(window.location.hash.substring(1));
-                if (hash) {
-                    const p = hash.split('|');
-                    if (p.length >= 17) {
-                        // Pass parameters including index 18 (autoCenter) if available
-                        loadModel(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15], p[16], p[17]==='true', p[18]==='true');
+                window.goToView = (yawDeg, pitchDeg, distance, duration) => {
+                    if (!controls) return;
+                    const targetDist = distance || baseStandardDist;
+                    const yaw = THREE.MathUtils.degToRad(yawDeg);
+                    const pitch = THREE.MathUtils.degToRad(pitchDeg);
+                    const endPos = new THREE.Vector3(
+                        controls.target.x + targetDist * Math.sin(pitch) * Math.sin(yaw),
+                        controls.target.y + targetDist * Math.cos(pitch),
+                        controls.target.z + targetDist * Math.sin(pitch) * Math.cos(yaw)
+                    );
+                    const startPos = camera.position.clone();
+                    const startTime = performance.now();
+                    const step = () => {
+                        const t = Math.min((performance.now() - startTime) / duration, 1);
+                        const ease = t * (2 - t);
+                        camera.position.lerpVectors(startPos, endPos, ease);
+                        camera.lookAt(controls.target);
+                        controls.update();
+                        if (t < 1) requestAnimationFrame(step);
                     }
-                }
+                    requestAnimationFrame(step);
+                };
+
+                window.triggerAppleAR = (url) => {
+                    const anchor = document.createElement('a');
+                    anchor.setAttribute('rel', 'ar'); anchor.setAttribute('href', url);
+                    const img = document.createElement('img'); img.src = ""; img.width = 1; img.height = 1;
+                    anchor.appendChild(img); document.body.appendChild(anchor);
+                    anchor.click(); document.body.removeChild(anchor);
+                };
+
+                // Notify Flutter that the viewer is ready
                 if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onViewerReady');
-            } catch (e) { console.error("Init Error:", e); }
+            } catch (e) { console.error(e); }
         }
 
-        // --- Core Load Function ---
-        function loadModel(path, bg, zoom, play, minz, maxz, be, ze, re, pe, nl, cp, tp, minP, maxP, minA, maxA, debug, autoCenter) {
+        function loadModel(path, bg, zoom, play, minz, maxz, be, ze, re, pe, nl, cp, tp, minP, maxP, minA, maxA, autoCenter, autoRot, rotSpeed, hdr, hdrInt, hsList, showGrid, showAxes, showTarget, showModel, showClick, showInfo, showHotspots, tapZoom) {
             if (isLoading || !path) return;
             isLoading = true;
-            lastLoadedPath = path;
+            modelUrl = path;
             enableBoundaries = (be === true || be === 'true');
-            showHelpers = (debug === true || debug === 'true');
-            const doAutoCenter = (autoCenter === true || autoCenter === 'true');
 
-            if (bg === 'transparent' || bg === '#00000000') {
-                scene.background = null;
-                renderer.setClearColor(0x000000, 0);
-            } else {
-                scene.background = new THREE.Color(bg || '#f0f0f0');
-                renderer.setClearColor(scene.background, 1);
-            }
+            config_showGrid = (showGrid === true || showGrid === 'true');
+            config_showAxes = (showAxes === true || showAxes === 'true');
+            config_showTarget = (showTarget === true || showTarget === 'true');
+            config_showModel = (showModel === true || showModel === 'true');
+            config_showClick = (showClick === true || showClick === 'true');
+            config_showInfo = (showInfo === true || showInfo === 'true');
+            config_showHotspots = (showHotspots === true || showHotspots === 'true');
+            config_doubleTapZoom = (tapZoom === true || tapZoom === 'true');
+            showHelpers = config_showGrid || config_showAxes || config_showTarget || config_showModel || config_showClick || config_showInfo || config_showHotspots;
 
-            // Apply interaction settings
+            if (bg === 'transparent' || bg === '#00000000') { scene.background = null; renderer.setClearColor(0x000000, 0); }
+            else { scene.background = new THREE.Color(bg || '#f0f0f0'); renderer.setClearColor(scene.background, 1); }
+
             controls.enableZoom = ze === true || ze === 'true';
             controls.enableRotate = re === true || re === 'true';
             controls.enablePan = pe === true || pe === 'true';
+            controls.autoRotate = autoRot === true || autoRot === 'true';
+            if (rotSpeed) controls.autoRotateSpeed = parseFloat(rotSpeed);
 
             if (axesHelper) scene.remove(axesHelper);
             if (gridHelper) scene.remove(gridHelper);
             if (debugMarkerTarget) scene.remove(debugMarkerTarget);
+            if (debugMarkerModel) scene.remove(debugMarkerModel);
+            if (debugMarkerClick) scene.remove(debugMarkerClick);
 
-            if (showHelpers) {
-                axesHelper = new THREE.AxesHelper(10); scene.add(axesHelper);
-                gridHelper = new THREE.GridHelper(50, 20); scene.add(gridHelper);
-                const targetGeo = new THREE.SphereGeometry(0.15, 16, 16);
-                const targetMat = new THREE.MeshBasicMaterial({ color: 0xff0000, depthTest: false, transparent: true, opacity: 0.8 });
-                debugMarkerTarget = new THREE.Mesh(targetGeo, targetMat);
+            if (config_showAxes) { axesHelper = new THREE.AxesHelper(10); scene.add(axesHelper); }
+            if (config_showGrid) { gridHelper = new THREE.GridHelper(50, 20); scene.add(gridHelper); }
+            if (config_showTarget) {
+                debugMarkerTarget = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), new THREE.MeshBasicMaterial({ color: 0xff0000, depthTest: false }));
                 debugMarkerTarget.renderOrder = 999; scene.add(debugMarkerTarget);
+            }
+            if (config_showModel) {
+                debugMarkerModel = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), new THREE.MeshBasicMaterial({ color: 0x00ff00, depthTest: false }));
+                debugMarkerModel.renderOrder = 998; scene.add(debugMarkerModel);
+            }
+            if (config_showClick) {
+                debugMarkerClick = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), new THREE.MeshBasicMaterial({ color: 0x00ccff, depthTest: false }));
+                debugMarkerClick.renderOrder = 1000; debugMarkerClick.visible = false; scene.add(debugMarkerClick);
             }
 
             if (currentModel) scene.remove(currentModel);
             if (mixer) { mixer.stopAllAction(); mixer = null; }
             actions = {};
-            if (nl === true || nl === 'true') document.getElementById('loading').style.display = 'flex';
+            const container = document.getElementById('hotspot-container');
+            container.innerHTML = ''; hotspots = [];
 
+            if (nl === true || nl === 'true') document.getElementById('loading').style.display = 'flex';
             if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onLoadStart');
 
             loader.load(path, (gltf) => {
                 try {
                     currentModel = gltf.scene;
                     currentModel.traverse(o => { if(o.isMesh) { o.castShadow = true; if(o.isSkinnedMesh) o.frustumCulled = false; } });
-
-                    if (doAutoCenter) {
+                    if (autoCenter === true || autoCenter === 'true') {
                         const box = new THREE.Box3().setFromObject(currentModel);
                         const center = box.getCenter(new THREE.Vector3());
-                        currentModel.position.x -= center.x;
-                        currentModel.position.y -= center.y;
-                        currentModel.position.z -= center.z;
+                        currentModel.position.sub(center);
                     }
-
                     scene.add(currentModel);
+                    currentModel.updateMatrixWorld(true);
 
-                    if (gltf.animations && gltf.animations.length > 0) {
+                    if (gltf.animations?.length > 0) {
                         mixer = new THREE.AnimationMixer(currentModel);
                         const list = gltf.animations.map(c => {
                             const a = mixer.clipAction(c); actions[c.name] = a; a.play();
@@ -165,40 +331,38 @@
                     }
 
                     const box = new THREE.Box3().setFromObject(currentModel);
-                    fixedModelCenter = box.getCenter(new THREE.Vector3());
-                    fixedModelSize = box.getSize(new THREE.Vector3());
-                    const maxSize = Math.max(fixedModelSize.x, fixedModelSize.y, fixedModelSize.z);
+                    initCenter = box.getCenter(new THREE.Vector3());
+                    initSize = box.getSize(new THREE.Vector3());
+                    const maxSize = Math.max(initSize.x, initSize.y, initSize.z);
                     const baseDist = maxSize / (2 * Math.atan(camera.fov * Math.PI / 360));
+                    baseStandardDist = baseDist * 1.5;
 
                     if (tp && tp !== "null") {
                         const t = tp.split(','); controls.target.set(parseFloat(t[0]), parseFloat(t[1]), parseFloat(t[2]));
                     } else {
-                        controls.target.copy(fixedModelCenter);
+                        controls.target.copy(initCenter);
                     }
 
                     const zVal = parseFloat(zoom) || 1.0;
-                    const standardDist = baseDist * 1.5;
-                    const currentDist = standardDist / zVal;
+                    const currentDist = baseStandardDist / zVal;
 
                     if (cp && cp !== "null") {
                         const c = cp.split(',');
                         const yaw = THREE.MathUtils.degToRad(parseFloat(c[0]) || 0);
                         let pitchDeg = parseFloat(c[1]);
-                        if (pitchDeg === 0) pitchDeg = 0.01;
+                        if (pitchDeg === 0) pitchDeg = 0.05;
                         const pitch = THREE.MathUtils.degToRad(pitchDeg);
                         const distInput = parseFloat(c[2]);
                         const finalDist = distInput > 0 ? (distInput / zVal) : currentDist;
-
                         camera.position.x = controls.target.x + finalDist * Math.sin(pitch) * Math.sin(yaw);
                         camera.position.y = controls.target.y + finalDist * Math.cos(pitch);
                         camera.position.z = controls.target.z + finalDist * Math.sin(pitch) * Math.cos(yaw);
                     } else {
                         camera.position.set(controls.target.x, controls.target.y, controls.target.z + currentDist);
                     }
-
                     camera.lookAt(controls.target);
+                    controls.update();
 
-                    // Limits
                     controls.minPolarAngle = parseAngleDegrees(minP, 0);
                     controls.maxPolarAngle = parseAngleDegrees(maxP, Math.PI);
                     const curAz = controls.getAzimuthalAngle();
@@ -210,17 +374,26 @@
                         controls.minAzimuthAngle = minAz; controls.maxAzimuthAngle = maxAz;
                     }
 
-                    if (minz !== "null" && minz) controls.maxDistance = standardDist / parseFloat(minz);
-                    else controls.maxDistance = 20000;
-                    if (maxz !== "null" && maxz) controls.minDistance = standardDist / parseFloat(maxz);
-                    else controls.minDistance = 0.01;
+                    let hsListParsed = [];
+                    if (typeof hsList === 'string' && hsList !== "null") try { hsListParsed = JSON.parse(hsList); } catch(e) {}
+                    if (Array.isArray(hsListParsed)) {
+                        hsListParsed.forEach(hs => {
+                            const el = document.createElement('div');
+                            el.className = 'hotspot'; el.id = `hs-${hs.id}`;
+                            el.style.backgroundColor = hs.color || '#ffcc00';
+                            el.style.width = (hs.size || 20) + 'px'; el.style.height = (hs.size || 20) + 'px';
+                            el.style.opacity = config_showHotspots ? '1' : '0';
+                            el.onclick = () => { if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onHotspotTapped', hs.id); };
+                            container.appendChild(el);
+                            hotspots.push({ id: hs.id, pos: new THREE.Vector3(...hs.pos), element: el });
+                        });
+                    }
 
                     controls.update();
                     isLoading = false;
                     document.getElementById('loading').style.display = 'none';
                     if (window.flutter_inappwebview) requestAnimationFrame(() => window.flutter_inappwebview.callHandler('onLoadComplete'));
                 } catch (err) {
-                    console.error("Load Success Error:", err);
                     if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onLoadError', err.toString());
                 }
             }, undefined, (e) => {
@@ -234,21 +407,32 @@
             if (mixer) mixer.update(clock.getDelta());
             if (controls) {
                 if (currentModel && enableBoundaries) {
-                    const limit = Math.max(fixedModelSize.x, fixedModelSize.y, fixedModelSize.z) * 1.5;
-                    controls.target.x = THREE.MathUtils.clamp(controls.target.x, fixedModelCenter.x - limit, fixedModelCenter.x + limit);
-                    controls.target.y = THREE.MathUtils.clamp(controls.target.y, fixedModelCenter.y - limit, fixedModelCenter.y + limit);
-                    controls.target.z = THREE.MathUtils.clamp(controls.target.z, fixedModelCenter.z - limit, fixedModelCenter.z + limit);
+                    const limit = Math.max(initSize.x, initSize.y, initSize.z) * 1.5;
+                    controls.target.x = THREE.MathUtils.clamp(controls.target.x, initCenter.x - limit, initCenter.x + limit);
+                    controls.target.y = THREE.MathUtils.clamp(controls.target.y, initCenter.y - limit, initCenter.y + limit);
+                    controls.target.z = THREE.MathUtils.clamp(controls.target.z, initCenter.z - limit, initCenter.z + limit);
                 }
                 controls.update();
-                if (showHelpers) {
-                    if (debugMarkerTarget) debugMarkerTarget.position.copy(controls.target);
-                    if (gridHelper) gridHelper.position.set(controls.target.x, 0, controls.target.z);
-                }
+                if (debugMarkerTarget && config_showTarget) debugMarkerTarget.position.copy(controls.target);
+                if (debugMarkerModel && config_showModel) debugMarkerModel.position.copy(initCenter);
+                if (gridHelper && config_showGrid) gridHelper.position.set(controls.target.x, 0, controls.target.z);
+                hotspots.forEach(hs => {
+                    const vector = hs.pos.clone().project(camera);
+                    const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                    const y = (vector.y * -0.5 + 0.5) * window.innerHeight;
+                    hs.element.style.left = `${x}px`; hs.element.style.top = `${y}px`;
+                    const raycaster = new THREE.Raycaster();
+                    const dir = hs.pos.clone().sub(camera.position).normalize();
+                    raycaster.set(camera.position, dir);
+                    const hits = raycaster.intersectObjects([currentModel], true);
+                    const distToHS = camera.position.distanceTo(hs.pos);
+                    if (hits.length > 0 && hits[0].distance < distToHS - 0.1) hs.element.style.opacity = '0';
+                    else hs.element.style.opacity = config_showHotspots ? '1' : '0';
+                    hs.element.style.display = 'block'; hs.element.style.pointerEvents = 'auto';
+                });
             }
             renderer.render(scene, camera);
         }
-        init();
-        animate();
     </script>
 </body>
 </html>
