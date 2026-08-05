@@ -27,9 +27,9 @@
         #debug-info {
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
             background: rgba(10, 10, 10, 0.95); color: #00ff00; padding: 14px; border-radius: 12px;
-            font-family: 'Courier New', monospace; font-size: 14px; font-weight: bold; pointer-events: none;
+            font-family: 'Courier New', monospace; font-size: 13px; font-weight: bold; pointer-events: none;
             display: none; z-index: 9999; text-align: center; width: 85%; border: 2px solid #00ff00;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5); line-height: 1.4;
         }
     </style>
 </head>
@@ -55,6 +55,7 @@
 
         // Debug Helpers
         let debugMarkerTarget, debugMarkerModel, debugMarkerClick, axesHelper, gridHelper;
+        let selectionBox;
         let hotspots = [];
         let isAnimating = false;
 
@@ -68,8 +69,8 @@
         let config_showInfo = false;
         let config_showHotspots = false;
         let config_doubleTapZoom = false;
+        let config_showInteractiveParts = false;
 
-        // Gesture State
         let tapCount = 0;
         let tapTimer = null;
         let lastTapPos = new THREE.Vector2();
@@ -121,7 +122,7 @@
                     const upPos = new THREE.Vector2(e.clientX, e.clientY);
                     const distMoved = pointerDownPos.distanceTo(upPos);
 
-                    if (distMoved > 25) { // Drag detected
+                    if (distMoved > 20) { // Drag detected
                         tapCount = 0;
                         if (tapTimer) { clearTimeout(tapTimer); tapTimer = null; }
                         return;
@@ -131,59 +132,64 @@
                     const distFromLastTap = upPos.distanceTo(lastTapPos);
                     lastTapPos.copy(upPos);
 
+                    const rect = renderer.domElement.getBoundingClientRect();
+                    const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                    const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                    const raycaster = new THREE.Raycaster();
+                    raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+                    currentModel.updateMatrixWorld(true);
+                    const intersects = raycaster.intersectObject(currentModel, true);
+
                     if (tapCount === 1) {
-                        tapTimer = setTimeout(() => {
-                            tapCount = 0;
-                            tapTimer = null;
-                        }, 400);
-                    } else if (tapCount >= 2 && distFromLastTap < 60) {
-                        // DOUBLE TAP DETECTED
+                        tapTimer = setTimeout(() => { tapCount = 0; tapTimer = null; }, 400);
+
+                        // --- SINGLE TAP DEBUG LOGIC ---
+                        if (config_showInfo || config_showInteractiveParts) {
+                            if (intersects.length > 0) {
+                                const hit = intersects[0];
+                                const p = hit.point;
+                                const objectName = hit.object.name || "Unnamed Part";
+
+                                const dbg = document.getElementById('debug-info');
+                                dbg.style.display = 'block';
+
+                                if (config_showInteractiveParts) {
+                                    dbg.innerHTML = `<span style='color:#fff'>PART IDENTIFIED:</span> ${objectName}`;
+                                    // Highlight single part
+                                    if (!selectionBox) {
+                                        selectionBox = new THREE.BoxHelper(hit.object, 0x00ff00);
+                                        selectionBox.material.depthTest = false;
+                                        selectionBox.renderOrder = 3000;
+                                        scene.add(selectionBox);
+                                    } else {
+                                        selectionBox.setFromObject(hit.object);
+                                        selectionBox.visible = true;
+                                    }
+                                } else {
+                                    dbg.innerHTML = `<span style='color:#fff'>XYZ:</span> [${p.x.toFixed(3)}, ${p.y.toFixed(3)}, ${p.z.toFixed(3)}]`;
+                                }
+
+                                if (config_showClick && debugMarkerClick) {
+                                    debugMarkerClick.position.copy(p);
+                                    debugMarkerClick.visible = true;
+                                }
+                                if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onDebugPoint', { x: p.x, y: p.y, z: p.z });
+                            } else {
+                                if (selectionBox) selectionBox.visible = false;
+                                document.getElementById('debug-info').style.display = 'none';
+                            }
+                        }
+                    } else if (tapCount === 2 && distFromLastTap < 60) {
                         if (tapTimer) { clearTimeout(tapTimer); tapTimer = null; }
                         tapCount = 0;
 
-                        const rect = renderer.domElement.getBoundingClientRect();
-                        const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-                        const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-                        const raycaster = new THREE.Raycaster();
-                        raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
-
-                        currentModel.updateMatrixWorld(true);
-                        const intersects = raycaster.intersectObject(currentModel, true);
-
                         if (intersects.length > 0) {
                             const hit = intersects[0];
-                            const p = hit.point;
                             const objectName = hit.object.name || "Unnamed Part";
-
-                            // Send to Flutter
-                            if (window.flutter_inappwebview) {
-                                window.flutter_inappwebview.callHandler('onObjectDoubleTapped', objectName);
-                            }
-
-                            // Zoom only if enabled
+                            if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onObjectDoubleTapped', objectName);
                             if (config_doubleTapZoom && !isAnimating) {
-                                cinematicMoveTo(p, baseStandardDist * 0.2);
+                                cinematicMoveTo(hit.point, baseStandardDist * 0.15);
                             }
-                        }
-                    }
-
-                    // --- DEBUG LOGIC (Single tap helpers) ---
-                    if (showHelpers && !isAnimating) {
-                        const rect = renderer.domElement.getBoundingClientRect();
-                        const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-                        const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-                        const raycaster = new THREE.Raycaster();
-                        raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
-                        const intersects = raycaster.intersectObject(currentModel, true);
-                        if (intersects.length > 0) {
-                            const p = intersects[0].point;
-                            if (debugMarkerClick && config_showClick) { debugMarkerClick.position.copy(p); debugMarkerClick.visible = true; }
-                            if (config_showInfo) {
-                                const dbg = document.getElementById('debug-info');
-                                dbg.innerText = `COORD: [${p.x.toFixed(3)}, ${p.y.toFixed(3)}, ${p.z.toFixed(3)}]`;
-                                dbg.style.display = 'block';
-                            }
-                            if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onDebugPoint', { x: p.x, y: p.y, z: p.z });
                         }
                     }
                 };
@@ -216,30 +222,15 @@
                 window.setAnimationProgress = (n, p) => { if (actions[n]) { actions[n].paused = true; actions[n].time = actions[n].getClip().duration * p; mixer.update(0); } };
                 window.setAutoRotate = (e, s) => { if (controls) { controls.autoRotate = e; if (s) controls.autoRotateSpeed = s; } };
                 window.setMaterialColor = (n, h) => { if (currentModel) currentModel.traverse(o => { if (o.isMesh && (o.name === n || n === "all")) o.material.color.set(h); }); };
-
                 window.resetToInitial = () => {
-                    if (!controls) return;
-
-                    const duration = 1000;
-                    const startTime = performance.now();
-
-                    // Clone initial states to avoid reference issues
-                    const startTarget = controls.target.clone();
-                    const startPos = camera.position.clone();
-
-                    // We need to calculate where the initial position was.
-                    // Instead of keeping complex state, we can re-derive it or use saved values.
-                    // I will add savedInitialPos and savedInitialTarget in loadModel.
-
-                    if (!window.savedInitialPos || !window.savedInitialTarget) return;
-
+                    if (!controls || !window.savedInitialPos) return;
+                    const duration = 1000; const startTime = performance.now();
+                    const startTarget = controls.target.clone(); const startPos = camera.position.clone();
                     function step() {
                         const t = Math.min((performance.now() - startTime) / duration, 1);
                         const ease = t * (2 - t);
-
                         controls.target.lerpVectors(startTarget, window.savedInitialTarget, ease);
                         camera.position.lerpVectors(startPos, window.savedInitialPos, ease);
-
                         controls.update();
                         if (t < 1) requestAnimationFrame(step);
                     }
@@ -249,12 +240,10 @@
                 window.goToView = (yawDeg, pitchDeg, distance, duration) => {
                     if (!controls) return;
                     const targetDist = distance || baseStandardDist;
-                    const yaw = THREE.MathUtils.degToRad(yawDeg);
-                    const pitch = THREE.MathUtils.degToRad(pitchDeg);
                     const endPos = new THREE.Vector3(
-                        controls.target.x + targetDist * Math.sin(pitch) * Math.sin(yaw),
-                        controls.target.y + targetDist * Math.cos(pitch),
-                        controls.target.z + targetDist * Math.sin(pitch) * Math.cos(yaw)
+                        controls.target.x + targetDist * Math.sin(THREE.MathUtils.degToRad(pitchDeg)) * Math.sin(THREE.MathUtils.degToRad(yawDeg)),
+                        controls.target.y + targetDist * Math.cos(THREE.MathUtils.degToRad(pitchDeg)),
+                        controls.target.z + targetDist * Math.sin(THREE.MathUtils.degToRad(pitchDeg)) * Math.cos(THREE.MathUtils.degToRad(yawDeg))
                     );
                     const startPos = camera.position.clone();
                     const startTime = performance.now();
@@ -277,12 +266,11 @@
                     anchor.click(); document.body.removeChild(anchor);
                 };
 
-                // Notify Flutter that the viewer is ready
                 if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onViewerReady');
             } catch (e) { console.error(e); }
         }
 
-        function loadModel(path, bg, zoom, play, minz, maxz, be, ze, re, pe, nl, cp, tp, minP, maxP, minA, maxA, autoCenter, autoRot, rotSpeed, hdr, hdrInt, hsList, showGrid, showAxes, showTarget, showModel, showClick, showInfo, showHotspots, tapZoom) {
+        function loadModel(path, bg, zoom, play, minz, maxz, be, ze, re, pe, nl, cp, tp, minP, maxP, minA, maxA, autoCenter, autoRot, rotSpeed, hdr, hdrInt, hsList, showGrid, showAxes, showTarget, showModel, showClick, showInfo, showHotspots, tapZoom, showInterPart) {
             if (isLoading || !path) return;
             isLoading = true;
             modelUrl = path;
@@ -296,7 +284,8 @@
             config_showInfo = (showInfo === true || showInfo === 'true');
             config_showHotspots = (showHotspots === true || showHotspots === 'true');
             config_doubleTapZoom = (tapZoom === true || tapZoom === 'true');
-            showHelpers = config_showGrid || config_showAxes || config_showTarget || config_showModel || config_showClick || config_showInfo || config_showHotspots;
+            config_showInteractiveParts = (showInterPart === true || showInterPart === 'true');
+            showHelpers = config_showGrid || config_showAxes || config_showTarget || config_showModel || config_showClick || config_showInfo || config_showHotspots || config_showInteractiveParts;
 
             if (bg === 'transparent' || bg === '#00000000') { scene.background = null; renderer.setClearColor(0x000000, 0); }
             else { scene.background = new THREE.Color(bg || '#f0f0f0'); renderer.setClearColor(scene.background, 1); }
@@ -312,6 +301,7 @@
             if (debugMarkerTarget) scene.remove(debugMarkerTarget);
             if (debugMarkerModel) scene.remove(debugMarkerModel);
             if (debugMarkerClick) scene.remove(debugMarkerClick);
+            if (selectionBox) scene.remove(selectionBox);
 
             if (config_showAxes) { axesHelper = new THREE.AxesHelper(10); scene.add(axesHelper); }
             if (config_showGrid) { gridHelper = new THREE.GridHelper(50, 20); scene.add(gridHelper); }
@@ -362,9 +352,7 @@
                     const box = new THREE.Box3().setFromObject(currentModel);
                     initCenter = box.getCenter(new THREE.Vector3());
                     initSize = box.getSize(new THREE.Vector3());
-                    const maxSize = Math.max(initSize.x, initSize.y, initSize.z);
-                    const baseDist = maxSize / (2 * Math.atan(camera.fov * Math.PI / 360));
-                    baseStandardDist = baseDist * 1.5;
+                    baseStandardDist = (Math.max(initSize.x, initSize.y, initSize.z) / (2 * Math.atan(camera.fov * Math.PI / 360))) * 1.5;
 
                     if (tp && tp !== "null") {
                         const t = tp.split(','); controls.target.set(parseFloat(t[0]), parseFloat(t[1]), parseFloat(t[2]));
@@ -377,22 +365,15 @@
 
                     if (cp && cp !== "null") {
                         const c = cp.split(',');
-                        const yaw = THREE.MathUtils.degToRad(parseFloat(c[0]) || 0);
-                        let pitchDeg = parseFloat(c[1]);
-                        if (pitchDeg === 0) pitchDeg = 0.05;
-                        const pitch = THREE.MathUtils.degToRad(pitchDeg);
-                        const distInput = parseFloat(c[2]);
-                        const finalDist = distInput > 0 ? (distInput / zVal) : currentDist;
-                        camera.position.x = controls.target.x + finalDist * Math.sin(pitch) * Math.sin(yaw);
-                        camera.position.y = controls.target.y + finalDist * Math.cos(pitch);
-                        camera.position.z = controls.target.z + finalDist * Math.sin(pitch) * Math.cos(yaw);
+                        camera.position.x = controls.target.x + currentDist * Math.sin(THREE.MathUtils.degToRad(parseFloat(c[1]))) * Math.sin(THREE.MathUtils.degToRad(parseFloat(c[0])));
+                        camera.position.y = controls.target.y + currentDist * Math.cos(THREE.MathUtils.degToRad(parseFloat(c[1])));
+                        camera.position.z = controls.target.z + currentDist * Math.sin(THREE.MathUtils.degToRad(parseFloat(c[1]))) * Math.cos(THREE.MathUtils.degToRad(parseFloat(c[0])));
                     } else {
                         camera.position.set(controls.target.x, controls.target.y, controls.target.z + currentDist);
                     }
                     camera.lookAt(controls.target);
                     controls.update();
 
-                    // Save initial state for reset functionality
                     window.savedInitialPos = camera.position.clone();
                     window.savedInitialTarget = controls.target.clone();
 
@@ -449,6 +430,8 @@
                 if (debugMarkerTarget && config_showTarget) debugMarkerTarget.position.copy(controls.target);
                 if (debugMarkerModel && config_showModel) debugMarkerModel.position.copy(initCenter);
                 if (gridHelper && config_showGrid) gridHelper.position.set(controls.target.x, 0, controls.target.z);
+                if (selectionBox && selectionBox.visible) selectionBox.update();
+
                 hotspots.forEach(hs => {
                     const vector = hs.pos.clone().project(camera);
                     const x = (vector.x * 0.5 + 0.5) * window.innerWidth;

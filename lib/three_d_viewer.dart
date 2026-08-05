@@ -49,6 +49,7 @@ class ThreeDDebugConfig {
   final bool showClickMarker;
   final bool showCameraInfo;
   final bool showHotspots;
+  final bool showInteractiveParts;
 
   const ThreeDDebugConfig({
     this.showGrid = false,
@@ -58,6 +59,7 @@ class ThreeDDebugConfig {
     this.showClickMarker = false,
     this.showCameraInfo = false,
     this.showHotspots = false,
+    this.showInteractiveParts = false,
   });
 
   factory ThreeDDebugConfig.all() => const ThreeDDebugConfig(
@@ -68,12 +70,13 @@ class ThreeDDebugConfig {
         showClickMarker: true,
         showCameraInfo: true,
         showHotspots: true,
+        showInteractiveParts: true,
       );
 }
 
 class ThreeDHotspot {
   final String id;
-  final List<double> position; // [x, y, z]
+  final List<double> position;
   final String? label;
   final Color color;
   final double size;
@@ -172,6 +175,7 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
   bool isServerRunning = false;
   bool isLoadingModel = true;
   bool isInitialLoadSent = false;
+  final Key _webViewKey = UniqueKey();
 
   @override
   void initState() {
@@ -235,19 +239,19 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
       widget.debugConfig.showCameraInfo,
       widget.debugConfig.showHotspots || widget.showHotspots,
       widget.enableDoubleTapZoom,
+      widget.debugConfig.showInteractiveParts,
     ];
   }
 
   @override
   Widget build(BuildContext context) {
     if (!isServerRunning) return const Center(child: CircularProgressIndicator());
-    
-    // Static initial URL to prevent reload loops
     final String initialUrl = "http://127.0.0.1:8080/assets/web_viewer/index.html";
 
     return Stack(
       children: [
         InAppWebView(
+          key: _webViewKey,
           initialUrlRequest: URLRequest(url: WebUri(initialUrl)),
           initialSettings: InAppWebViewSettings(
             javaScriptEnabled: true,
@@ -285,11 +289,13 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
             controller.addJavaScriptHandler(handlerName: 'onHotspotTapped', callback: (args) => widget.onHotspotTapped?.call(args[0].toString()));
             controller.addJavaScriptHandler(handlerName: 'onObjectDoubleTapped', callback: (args) => widget.onObjectDoubleTapped?.call(args[0].toString()));
             controller.addJavaScriptHandler(handlerName: 'onDebugPoint', callback: (args) {
-              final data = args[0] as Map;
-              final x = (data['x'] as num).toStringAsFixed(3);
-              final y = (data['y'] as num).toStringAsFixed(3);
-              final z = (data['z'] as num).toStringAsFixed(3);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: SelectableText("Coord: [$x, $y, $z]"), duration: const Duration(seconds: 5)));
+              if (widget.debugConfig.showCameraInfo) {
+                final data = args[0] as Map;
+                final x = (data['x'] as num).toStringAsFixed(3);
+                final y = (data['y'] as num).toStringAsFixed(3);
+                final z = (data['z'] as num).toStringAsFixed(3);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: SelectableText("Coord: [$x, $y, $z]"), duration: const Duration(seconds: 5)));
+              }
             });
 
             controller.addJavaScriptHandler(
