@@ -83,7 +83,7 @@ class DashboardPage extends StatelessWidget {
               path: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BrainStem/glTF-Binary/BrainStem.glb',
               zoom: 1.5,
               autoPlay: true,
-              targetPosition: [0, 1, 0],
+              targetPosition: [0, 1, 1],
               hotspots: [
                 const ThreeDHotspot(id: 'brain_core', position: [0, 1, 0], label: 'Main Core'),
               ],
