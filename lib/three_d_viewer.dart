@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -14,16 +13,11 @@ class ThreeDAnimation {
 }
 
 class ThreeDRotationLimits {
-  final double? minVerticalAngle;
-  final double? maxVerticalAngle;
-  final double? minHorizontalAngle;
-  final double? maxHorizontalAngle;
-  const ThreeDRotationLimits({this.minVerticalAngle, this.maxVerticalAngle, this.minHorizontalAngle, this.maxHorizontalAngle});
-  double? _toRad(double? deg) => deg != null ? deg * (math.pi / 180.0) : null;
-  double? get minVerticalRad => _toRad(minVerticalAngle);
-  double? get maxVerticalRad => _toRad(maxVerticalAngle);
-  double? get minHorizontalRad => _toRad(minHorizontalAngle);
-  double? get maxHorizontalRad => _toRad(maxHorizontalAngle);
+  final double? up;
+  final double? down;
+  final double? left;
+  final double? right;
+  const ThreeDRotationLimits({this.up, this.down, this.left, this.right});
 }
 
 class ThreeDZoomConfig {
@@ -221,10 +215,10 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
       widget.customLoader == null, 
       widget.initialCameraPosition?.join(',') ?? "null", 
       widget.initialTargetPosition?.join(',') ?? "null",
-      widget.rotationLimits?.minVerticalAngle ?? "null",
-      widget.rotationLimits?.maxVerticalAngle ?? "null",
-      widget.rotationLimits?.minHorizontalAngle ?? "null",
-      widget.rotationLimits?.maxHorizontalAngle ?? "null",
+      widget.rotationLimits?.up ?? "null",
+      widget.rotationLimits?.down ?? "null",
+      widget.rotationLimits?.left ?? "null",
+      widget.rotationLimits?.right ?? "null",
       widget.autoCenter,
       widget.autoRotateConfig.autoRotate,
       initialSpeed,

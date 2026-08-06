@@ -149,6 +149,12 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                     initialZoom: widget.initialZoom,
                     enableZoom: true,
                   ),
+                  rotationLimits: const ThreeDRotationLimits(
+                    left: 90,  // Allow 90 degrees rotation to the left
+                    right: 45, // Allow 45 degrees rotation to the right
+                    up: 0,     // Lock vertical rotation (0 degrees up)
+                    down: 45   // Allow 45 degrees rotation down
+                  ),
                   controller: _controller,
                   assetPath: widget.modelPath,
                   backgroundColor: Colors.transparent,

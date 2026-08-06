@@ -407,15 +407,29 @@
                     window.savedInitialPos = camera.position.clone();
                     window.savedInitialTarget = controls.target.clone();
 
-                    controls.minPolarAngle = parseAngleDegrees(minP, 0);
-                    controls.maxPolarAngle = parseAngleDegrees(maxP, Math.PI);
+                    const curPol = controls.getPolarAngle();
                     const curAz = controls.getAzimuthalAngle();
-                    const minAz = parseAngleDegrees(minA, -Infinity);
-                    const maxAz = parseAngleDegrees(maxA, Infinity);
-                    if (minAz !== -Infinity && maxAz !== Infinity && Math.abs(maxAz - minAz) < Math.PI * 2) {
-                        controls.minAzimuthAngle = curAz + minAz; controls.maxAzimuthAngle = curAz + maxAz;
+                    const radUp = parseAngleDegrees(minP, null);
+                    const radDown = parseAngleDegrees(maxP, null);
+                    const radLeft = parseAngleDegrees(minA, null);
+                    const radRight = parseAngleDegrees(maxA, null);
+
+                    // Vertical limits: Swapped to match user expectation (up allows looking down, down allows looking up)
+                    if (radUp !== null && radDown !== null) {
+                        controls.minPolarAngle = Math.max(0, curPol - Math.abs(radDown));
+                        controls.maxPolarAngle = Math.min(Math.PI, curPol + Math.abs(radUp));
                     } else {
-                        controls.minAzimuthAngle = minAz; controls.maxAzimuthAngle = maxAz;
+                        if (radUp !== null) controls.maxPolarAngle = curPol + radUp;
+                        if (radDown !== null) controls.minPolarAngle = curPol - radDown;
+                    }
+
+                    // Horizontal limits: radLeft allows rotating left (increasing azimuth), radRight allows rotating right (decreasing azimuth)
+                    if (radLeft !== null && radRight !== null) {
+                        controls.minAzimuthAngle = curAz - Math.abs(radRight);
+                        controls.maxAzimuthAngle = curAz + Math.abs(radLeft);
+                    } else {
+                        if (radLeft !== null) controls.minAzimuthAngle = radLeft;
+                        if (radRight !== null) controls.maxAzimuthAngle = radRight;
                     }
 
                     let hsListParsed = [];
