@@ -119,7 +119,7 @@
                     const distMoved = pointerDownPos.distanceTo(upPos);
 
                     // If it's a significant move, it's a drag/orbit, not a tap
-                    if (distMoved > 15) {
+                    if (distMoved > 20) {
                         tapCount = 0;
                         if (tapTimer) { clearTimeout(tapTimer); tapTimer = null; }
                         return;
@@ -186,6 +186,9 @@
                         if (tapTimer) { clearTimeout(tapTimer); tapTimer = null; }
                         tapCount = 0;
 
+                        // Force clear OrbitControls state to prevent "stuck finger" on iOS
+                        if (controls && controls.resetPointers) controls.resetPointers();
+
                         if (intersects.length > 0) {
                             const hit = intersects[0];
                             const objectName = hit.object.name || "Unnamed Part";
@@ -198,6 +201,10 @@
                 };
 
                 const onPointerDown = (e) => {
+                    // On some older devices, ensure OrbitControls starts fresh if a lift-off was missed
+                    if (controls && controls.resetPointers && e.isPrimary) {
+                        controls.resetPointers();
+                    }
                     pointerDownPos.set(e.clientX, e.clientY);
                 };
 
@@ -217,13 +224,17 @@
                 renderer.domElement.addEventListener('pointerdown', onPointerDown, true);
                 renderer.domElement.addEventListener('pointerup', onPointerUp, true);
                 renderer.domElement.addEventListener('touchend', onTouchEnd, { capture: true, passive: false });
-                renderer.domElement.addEventListener('pointercancel', () => { tapCount = 0; if(tapTimer) clearTimeout(tapTimer); }, true);
-
-                renderer.domElement.addEventListener('pointerdown', onPointerDown, true);
-                renderer.domElement.addEventListener('pointerup', onPointerUp, true);
+                renderer.domElement.addEventListener('pointercancel', () => {
+                    tapCount = 0;
+                    if(tapTimer) clearTimeout(tapTimer);
+                    if(controls && controls.resetPointers) controls.resetPointers();
+                }, true);
 
                 function cinematicMoveTo(point, distance) {
                     isAnimating = true;
+                    // Reset pointers to prevent stuck state on iOS after double-tap
+                    if (controls && controls.resetPointers) controls.resetPointers();
+
                     const startTarget = controls.target.clone();
                     const startPos = camera.position.clone();
                     const direction = new THREE.Vector3().subVectors(startPos, startTarget).normalize();
@@ -237,7 +248,14 @@
                         camera.position.lerpVectors(startPos, endPos, ease);
                         controls.update();
                         if (t < 1) requestAnimationFrame(step);
-                        else isAnimating = false;
+                        else {
+                            isAnimating = false;
+                            // Re-enable controls and ensure a clean pointer state
+                            if (controls) {
+                                controls.enabled = true;
+                                if (controls.resetPointers) controls.resetPointers();
+                            }
+                        }
                     }
                     requestAnimationFrame(step);
                 }

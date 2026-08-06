@@ -168,6 +168,20 @@ class OrbitControls extends EventDispatcher {
 
 		};
 
+		this.resetPointers = function () {
+
+			pointers.length = 0;
+
+			for ( const key in pointerPositions ) {
+
+				delete pointerPositions[ key ];
+
+			}
+
+			state = STATE.NONE;
+
+		};
+
 		// this method is exposed, but perhaps it would be better if we can make it private...
 		this.update = function () {
 
@@ -1404,6 +1418,7 @@ class OrbitControls extends EventDispatcher {
 
 		scope.domElement.addEventListener( 'pointerdown', onPointerDown );
 		scope.domElement.addEventListener( 'pointercancel', onPointerUp );
+		scope.domElement.addEventListener( 'lostpointercapture', onPointerUp );
 		scope.domElement.addEventListener( 'wheel', onMouseWheel, { passive: false } );
 
 		// force an update at start
