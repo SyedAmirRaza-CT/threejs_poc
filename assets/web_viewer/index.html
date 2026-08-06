@@ -111,37 +111,41 @@
                     renderer.setSize(window.innerWidth, window.innerHeight);
                 });
 
-                // --- INTEGRATED MULTI-DEVICE TAP ENGINE ---
-                const onPointerDown = (e) => {
-                    pointerDownPos.set(e.clientX, e.clientY);
-                };
-
-                const onPointerUp = (e) => {
+                // --- ROBUST MULTI-DEVICE TAP ENGINE ---
+                const handleTap = (clientX, clientY, isTouch, event) => {
                     if (!currentModel) return;
 
-                    const upPos = new THREE.Vector2(e.clientX, e.clientY);
+                    const upPos = new THREE.Vector2(clientX, clientY);
                     const distMoved = pointerDownPos.distanceTo(upPos);
 
-                    if (distMoved > 20) { // Drag detected
+                    // If it's a significant move, it's a drag/orbit, not a tap
+                    if (distMoved > 15) {
                         tapCount = 0;
                         if (tapTimer) { clearTimeout(tapTimer); tapTimer = null; }
                         return;
                     }
 
+                    // For touches, prevent virtual mouse events and browser gestures (like double-tap zoom)
+                    // ONLY if we've determined it's a tap.
+                    if (isTouch && event && event.cancelable) {
+                        event.preventDefault();
+                    }
+
+                    console.log("Hereee");
                     tapCount++;
                     const distFromLastTap = upPos.distanceTo(lastTapPos);
                     lastTapPos.copy(upPos);
 
                     const rect = renderer.domElement.getBoundingClientRect();
-                    const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-                    const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                    const x = ((clientX - rect.left) / rect.width) * 2 - 1;
+                    const y = -((clientY - rect.top) / rect.height) * 2 + 1;
                     const raycaster = new THREE.Raycaster();
                     raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
                     currentModel.updateMatrixWorld(true);
                     const intersects = raycaster.intersectObject(currentModel, true);
 
                     if (tapCount === 1) {
-                        tapTimer = setTimeout(() => { tapCount = 0; tapTimer = null; }, 400);
+                        tapTimer = setTimeout(() => { tapCount = 0; tapTimer = null; }, 350);
 
                         // --- SINGLE TAP DEBUG LOGIC ---
                         if (config_showInfo || config_showInteractiveParts) {
@@ -155,7 +159,6 @@
 
                                 if (config_showInteractiveParts) {
                                     dbg.innerHTML = `<span style='color:#fff'>PART IDENTIFIED:</span> ${objectName}`;
-                                    // Highlight single part
                                     if (!selectionBox) {
                                         selectionBox = new THREE.BoxHelper(hit.object, 0x00ff00);
                                         selectionBox.material.depthTest = false;
@@ -179,7 +182,7 @@
                                 document.getElementById('debug-info').style.display = 'none';
                             }
                         }
-                    } else if (tapCount === 2 && distFromLastTap < 60) {
+                    } else if (tapCount === 2 && distFromLastTap < 50) {
                         if (tapTimer) { clearTimeout(tapTimer); tapTimer = null; }
                         tapCount = 0;
 
@@ -193,6 +196,28 @@
                         }
                     }
                 };
+
+                const onPointerDown = (e) => {
+                    pointerDownPos.set(e.clientX, e.clientY);
+                };
+
+                const onPointerUp = (e) => {
+                    // Only handle mouse/pen here; touch is handled by touchend for iOS reliability
+                    if (e.pointerType === 'touch') return;
+                    handleTap(e.clientX, e.clientY, false, e);
+                };
+
+                const onTouchEnd = (e) => {
+                    if (e.changedTouches.length > 0) {
+                        const t = e.changedTouches[0];
+                        handleTap(t.clientX, t.clientY, true, e);
+                    }
+                };
+
+                renderer.domElement.addEventListener('pointerdown', onPointerDown, true);
+                renderer.domElement.addEventListener('pointerup', onPointerUp, true);
+                renderer.domElement.addEventListener('touchend', onTouchEnd, { capture: true, passive: false });
+                renderer.domElement.addEventListener('pointercancel', () => { tapCount = 0; if(tapTimer) clearTimeout(tapTimer); }, true);
 
                 renderer.domElement.addEventListener('pointerdown', onPointerDown, true);
                 renderer.domElement.addEventListener('pointerup', onPointerUp, true);
@@ -360,8 +385,13 @@
                         controls.target.copy(initCenter);
                     }
 
-                    const zVal = parseFloat(zoom) || 1.0;
+                    let zVal = parseFloat(zoom) || 1.0;
+                    if (minz && minz !== "null") zVal = Math.max(zVal, parseFloat(minz));
+                    if (maxz && maxz !== "null") zVal = Math.min(zVal, parseFloat(maxz));
                     const currentDist = baseStandardDist / zVal;
+
+                    if (minz && minz !== "null") controls.maxDistance = baseStandardDist / parseFloat(minz);
+                    if (maxz && maxz !== "null") controls.minDistance = baseStandardDist / parseFloat(maxz);
 
                     if (cp && cp !== "null") {
                         const c = cp.split(',');
