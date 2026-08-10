@@ -525,10 +525,17 @@
 
                     requestAnimationFrame(() => dispatchFlutterMessage('onLoadComplete'));
                 } catch (err) {
+                    document.getElementById('loading-text').innerHTML = "Error: " + err.toString();
                     dispatchFlutterMessage('onLoadError', err.toString());
                 }
-            }, undefined, (e) => {
+            }, (xhr) => {
+                if (xhr.total) {
+                    const pct = Math.round((xhr.loaded / xhr.total) * 100);
+                    document.getElementById('loading-text').innerHTML = "Loading " + pct + "%";
+                }
+            }, (e) => {
                 isLoading = false;
+                document.getElementById('loading-text').innerHTML = "Load Error: " + e.toString();
                 dispatchFlutterMessage('onLoadError', e.toString());
             });
         }

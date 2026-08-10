@@ -82,9 +82,11 @@ class DashboardPage extends StatelessWidget {
                 icon: Icons.biotech,
                 color: Colors.redAccent,
                 path: 'assets/animation/syringe.glb',
-                zoom: 1,
+                zoom: 1.5,
                 autoPlay: true,
+                cameraPosition: [0.0, 90.0],
               ),
+
               const SizedBox(height: 20),
               _buildModelCard(
                 context,
