@@ -31,7 +31,7 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
   bool _isAutoRotating = false;
   bool _isClockwise = true;
   List<ThreeDAnimation> _animations = [];
-  Map<String, double> _animationProgress = {};
+  final Map<String, double> _animationProgress = {};
 
   @override
   void initState() {
@@ -95,7 +95,7 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                     const SizedBox(width: 8),
                     ActionChip(
                       label: const Text("Tint Red"),
-                      onPressed: () => _controller.setMaterialColor("all", Colors.red.withOpacity(0.5)),
+                      onPressed: () => _controller.setMaterialColor("all", Colors.red.withValues(alpha: 0.5)),
                     ),
                     const SizedBox(width: 8),
                     ActionChip(
@@ -176,7 +176,7 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                       color: Colors.white,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, -5),
                         ),
@@ -214,7 +214,7 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: Colors.blue.withOpacity(0.1),
+                                  color: Colors.blue.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
@@ -256,7 +256,7 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                                         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
                                         overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
                                         activeTrackColor: Colors.blue,
-                                        inactiveTrackColor: Colors.blue.withOpacity(0.1),
+                                        inactiveTrackColor: Colors.blue.withValues(alpha: 0.1),
                                         thumbColor: Colors.blue,
                                       ),
                                       child: Slider(
