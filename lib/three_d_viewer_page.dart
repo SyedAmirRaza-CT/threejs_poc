@@ -4,6 +4,8 @@ import 'three_d_viewer.dart';
 class ThreeDViewerPage extends StatefulWidget {
   final String modelPath;
   final double initialZoom;
+  final double minZoom;
+  final double maxZoom;
   final bool autoPlay;
   final List<double>? initialCameraPosition;
   final List<double>? initialTargetPosition;
@@ -14,6 +16,8 @@ class ThreeDViewerPage extends StatefulWidget {
     super.key,
     required this.modelPath,
     this.initialZoom = 1.0,
+    this.minZoom = 0.2,
+    this.maxZoom = 10.0,
     this.autoPlay = true,
     this.initialCameraPosition,
     this.initialTargetPosition,
@@ -63,7 +67,11 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
               setState(() {
                 _isAutoRotating = !_isAutoRotating;
               });
-              _controller.setAutoRotate(_isAutoRotating, speed: 2.0, clockwise: _isClockwise);
+              _controller.setAutoRotate(
+                _isAutoRotating,
+                speed: 2.0,
+                clockwise: _isClockwise,
+              );
             },
           ),
           if (_animations.isNotEmpty)
@@ -85,29 +93,45 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
               // Test Controls for new features
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 child: Row(
                   children: [
                     ActionChip(
                       label: const Text("Cinematic View"),
-                      onPressed: () => _controller.goToView(45, 45, 5, durationMillis: 2000),
+                      onPressed: () =>
+                          _controller.goToView(45, 45, 5, durationMillis: 2000),
                     ),
                     const SizedBox(width: 8),
                     ActionChip(
                       label: const Text("Tint Red"),
-                      onPressed: () => _controller.setMaterialColor("all", Colors.red.withValues(alpha: 0.5)),
+                      onPressed: () => _controller.setMaterialColor(
+                        "all",
+                        Colors.red.withValues(alpha: 0.5),
+                      ),
                     ),
                     const SizedBox(width: 8),
                     ActionChip(
                       label: const Text("Reset Color"),
-                      onPressed: () => _controller.setMaterialColor("all", Colors.white),
+                      onPressed: () =>
+                          _controller.setMaterialColor("all", Colors.white),
                     ),
                     const SizedBox(width: 8),
                     ActionChip(
-                      label: Icon(_isClockwise ? Icons.rotate_right : Icons.rotate_left, size: 18),
+                      label: Icon(
+                        _isClockwise ? Icons.rotate_right : Icons.rotate_left,
+                        size: 18,
+                      ),
                       onPressed: () {
                         setState(() => _isClockwise = !_isClockwise);
-                        if (_isAutoRotating) _controller.setAutoRotate(true, clockwise: _isClockwise);
+                        if (_isAutoRotating) {
+                          _controller.setAutoRotate(
+                            true,
+                            clockwise: _isClockwise,
+                          );
+                        }
                       },
                     ),
                   ],
@@ -120,10 +144,12 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                   initialCameraPosition: widget.initialCameraPosition,
                   hotspots: widget.hotspots,
                   onHotspotTapped: (id) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text("Hotspot Tapped: $id"),
-                      duration: const Duration(seconds: 1),
-                    ));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text("Hotspot Tapped: $id"),
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
                   },
                   onObjectDoubleTapped: (name) {
                     showDialog(
@@ -147,6 +173,8 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                   enablePan: false,
                   zoomConfig: ThreeDZoomConfig(
                     initialZoom: widget.initialZoom,
+                    minZoom: widget.minZoom,
+                    maxZoom: widget.maxZoom,
                     enableZoom: true,
                   ),
                   controller: _controller,
@@ -169,7 +197,9 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
               if (_animations.isNotEmpty)
                 ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxHeight: constraints.maxHeight * 0.45, // Dynamic height capped at 45%
+                    maxHeight:
+                        constraints.maxHeight *
+                        0.45, // Dynamic height capped at 45%
                   ),
                   child: Container(
                     decoration: BoxDecoration(
@@ -212,7 +242,10 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                                 ),
                               ),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.blue.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(8),
@@ -253,20 +286,32 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                                     SliderTheme(
                                       data: SliderTheme.of(context).copyWith(
                                         trackHeight: 4,
-                                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-                                        overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+                                        thumbShape: const RoundSliderThumbShape(
+                                          enabledThumbRadius: 8,
+                                        ),
+                                        overlayShape:
+                                            const RoundSliderOverlayShape(
+                                              overlayRadius: 16,
+                                            ),
                                         activeTrackColor: Colors.blue,
-                                        inactiveTrackColor: Colors.blue.withValues(alpha: 0.1),
+                                        inactiveTrackColor: Colors.blue
+                                            .withValues(alpha: 0.1),
                                         thumbColor: Colors.blue,
                                       ),
                                       child: Slider(
-                                        value: _animationProgress[anim.name] ?? 0.0,
+                                        value:
+                                            _animationProgress[anim.name] ??
+                                            0.0,
                                         onChanged: (value) {
                                           setState(() {
-                                            _animationProgress[anim.name] = value;
+                                            _animationProgress[anim.name] =
+                                                value;
                                             _isPlaying = false;
                                           });
-                                          _controller.setAnimationProgress(anim.name, value);
+                                          _controller.setAnimationProgress(
+                                            anim.name,
+                                            value,
+                                          );
                                         },
                                       ),
                                     ),
