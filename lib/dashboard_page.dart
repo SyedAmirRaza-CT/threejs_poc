@@ -75,6 +75,16 @@ class DashboardPage extends StatelessWidget {
               autoPlay: true,
               cameraPosition: [0, -120, 0],
             ),
+              const SizedBox(height: 20),
+              _buildModelCard(
+                context,
+                title: 'Syringe',
+                icon: Icons.biotech,
+                color: Colors.redAccent,
+                path: 'assets/animation/syringe.glb',
+                zoom: 1,
+                autoPlay: true,
+              ),
             const SizedBox(height: 20),
             _buildModelCard(
               context,
