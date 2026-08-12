@@ -78,15 +78,23 @@ class DashboardPage extends StatelessWidget {
               const SizedBox(height: 20),
               _buildModelCard(
                 context,
-                title: 'Syringe',
+                title: 'IV_Manikin',
                 icon: Icons.biotech,
                 color: Colors.redAccent,
-                path: 'assets/animation/syringe.glb',
-                zoom: 1.5,
+                path: 'assets/animation/IV_Manikin.glb',
+                zoom: 0.4,
                 autoPlay: true,
-                cameraPosition: [0.0, 90.0],
               ),
-
+              const SizedBox(height: 20),
+              _buildModelCard(
+                context,
+                title: 'Manikin_IV_Final',
+                icon: Icons.biotech,
+                color: Colors.redAccent,
+                path: 'assets/animation/Manikin_IV_Final.glb',
+                zoom: 1,
+                autoPlay: true,
+              ),
               const SizedBox(height: 20),
               _buildModelCard(
                 context,

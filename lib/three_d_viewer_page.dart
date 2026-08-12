@@ -140,6 +140,9 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
               Expanded(
                 child: ThreeDViewer(
                   autoCenter: true,
+                   // debugConfig: ThreeDDebugConfig(
+                   //   showInteractiveParts: true
+                   // ),
                   initialTargetPosition: widget.initialTargetPosition,
                   initialCameraPosition: widget.initialCameraPosition,
                   hotspots: widget.hotspots,
