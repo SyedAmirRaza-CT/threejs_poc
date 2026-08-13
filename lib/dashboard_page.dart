@@ -98,6 +98,16 @@ class DashboardPage extends StatelessWidget {
               const SizedBox(height: 20),
               _buildModelCard(
                 context,
+                title: 'Test_03',
+                icon: Icons.biotech,
+                color: Colors.redAccent,
+                path: 'assets/animation/Test_03.glb',
+                zoom: 1,
+                autoPlay: true,
+              ),
+              const SizedBox(height: 20),
+              _buildModelCard(
+                context,
                 title: 'BrainStem (Remote)',
                 icon: Icons.psychology,
                 color: Colors.blueGrey,
