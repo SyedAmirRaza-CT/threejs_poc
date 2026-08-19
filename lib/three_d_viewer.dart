@@ -92,6 +92,23 @@ class ThreeDHotspot {
       };
 }
 
+class ThreeDOverlay {
+  final String id;
+  final List<double> position;
+  final Widget child;
+
+  const ThreeDOverlay({
+    required this.id,
+    required this.position,
+    required this.child,
+  });
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'pos': position,
+      };
+}
+
 class ThreeDEnvironmentConfig {
   final String? hdrUrl;
   final double intensity;
@@ -117,6 +134,7 @@ class ThreeDViewer extends StatefulWidget {
   final ThreeDEnvironmentConfig? environmentConfig;
   final ThreeDDebugConfig debugConfig;
   final List<ThreeDHotspot>? hotspots;
+  final List<ThreeDOverlay>? overlays;
   final bool enableRotate;
   final bool enablePan;
   final bool enableBoundaries;
@@ -142,6 +160,7 @@ class ThreeDViewer extends StatefulWidget {
     this.debugConfig = const ThreeDDebugConfig(),
     this.environmentConfig,
     this.hotspots,
+    this.overlays,
     this.enableRotate = true,
     this.enablePan = true,
     this.enableBoundaries = true,
@@ -170,6 +189,9 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
   bool isLoadingModel = true;
   bool isInitialLoadSent = false;
   final Key _webViewKey = UniqueKey();
+  
+  // Track overlay positions sent from JS
+  Map<String, dynamic> _overlayData = {};
 
   @override
   void initState() {
@@ -234,6 +256,7 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
       widget.debugConfig.showHotspots || widget.showHotspots,
       widget.enableDoubleTapZoom,
       widget.debugConfig.showInteractiveParts,
+      jsonEncode(widget.overlays?.map((e) => e.toMap()).toList() ?? []),
     ];
   }
 
@@ -293,6 +316,17 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
             });
 
             controller.addJavaScriptHandler(
+              handlerName: 'onOverlaysUpdated',
+              callback: (args) {
+                if (mounted) {
+                  setState(() {
+                    _overlayData = args[0] as Map<String, dynamic>;
+                  });
+                }
+              },
+            );
+
+            controller.addJavaScriptHandler(
               handlerName: 'onLaunchAR',
               callback: (args) async {
                 final modelUrl = args[0] as String;
@@ -308,6 +342,23 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
           },
           onConsoleMessage: (controller, msg) => debugPrint("3D JS: ${msg.message}"),
         ),
+        // Render Flutter Overlays
+        if (widget.overlays != null)
+          ...widget.overlays!.map((overlay) {
+            final data = _overlayData[overlay.id];
+            if (data == null || data['visible'] == false) {
+              return const SizedBox.shrink();
+            }
+
+            return Positioned(
+              left: (data['x'] as num).toDouble(),
+              top: (data['y'] as num).toDouble(),
+              child: FractionalTranslation(
+                translation: const Offset(-0.5, -0.5),
+                child: overlay.child,
+              ),
+            );
+          }),
         if (widget.customLoader != null)
           Positioned.fill(child: IgnorePointer(ignoring: !isLoadingModel, child: AnimatedOpacity(opacity: isLoadingModel ? 1.0 : 0.0, duration: const Duration(milliseconds: 500), child: widget.customLoader!))),
       ],

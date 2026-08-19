@@ -124,6 +124,7 @@
         let debugMarkerTarget, debugMarkerModel, debugMarkerClick, axesHelper, gridHelper;
         let selectionBox;
         let hotspots = [];
+        let flutterOverlays = [];
         let isAnimating = false;
 
         // Configuration Flags
@@ -418,7 +419,7 @@
 
         let modelOffset = new THREE.Vector3();
 
-        function loadModel(path, bg, zoom, play, minz, maxz, be, ze, re, pe, nl, cp, tp, minP, maxP, minA, maxA, autoCenter, autoRot, rotSpeed, hdr, hdrInt, hsList, showGrid, showAxes, showTarget, showModel, showClick, showInfo, showHotspots, tapZoom, showInterPart) {
+        function loadModel(path, bg, zoom, play, minz, maxz, be, ze, re, pe, nl, cp, tp, minP, maxP, minA, maxA, autoCenter, autoRot, rotSpeed, hdr, hdrInt, hsList, showGrid, showAxes, showTarget, showModel, showClick, showInfo, showHotspots, tapZoom, showInterPart, overlayList) {
             if (isLoading || !path) return;
             isLoading = true;
             modelUrl = path;
@@ -470,7 +471,7 @@
             if (mixer) { mixer.stopAllAction(); mixer = null; }
             actions = {};
             const container = document.getElementById('hotspot-container');
-            container.innerHTML = ''; hotspots = [];
+            container.innerHTML = ''; hotspots = []; flutterOverlays = [];
 
             if (nl === true || nl === 'true') document.getElementById('loading').style.display = 'flex';
             dispatchFlutterMessage('onLoadStart');
@@ -584,6 +585,18 @@
                         });
                     }
 
+                    let overlayListParsed = [];
+                    if (typeof overlayList === 'string' && overlayList !== "null") try { overlayListParsed = JSON.parse(overlayList); } catch (e) { }
+                    if (Array.isArray(overlayListParsed)) {
+                        overlayListParsed.forEach(o => {
+                            const oPos = new THREE.Vector3(...o.pos);
+                            if (autoCenter === true || autoCenter === 'true') {
+                                oPos.sub(modelOffset);
+                            }
+                            flutterOverlays.push({ id: o.id, pos: oPos });
+                        });
+                    }
+
                     controls.update();
                     isLoading = false;
                     document.getElementById('loading').style.display = 'none';
@@ -622,12 +635,12 @@
                 if (selectionBox && selectionBox.visible) selectionBox.update();
 
                 if (currentModel) {
+                    const raycaster = new THREE.Raycaster();
                     hotspots.forEach(hs => {
                         const vector = hs.pos.clone().project(camera);
                         const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
                         const y = (vector.y * -0.5 + 0.5) * window.innerHeight;
                         hs.element.style.left = `${x}px`; hs.element.style.top = `${y}px`;
-                        const raycaster = new THREE.Raycaster();
                         const dir = hs.pos.clone().sub(camera.position).normalize();
                         raycaster.set(camera.position, dir);
                         const hits = raycaster.intersectObjects([currentModel], true);
@@ -637,6 +650,26 @@
                         hs.element.style.pointerEvents = isVisible ? 'auto' : 'none';
                         hs.element.style.display = isVisible ? 'block' : 'none';
                     });
+
+                    // Update Flutter Overlays
+                    const overlayData = {};
+                    flutterOverlays.forEach(o => {
+                        const vector = o.pos.clone().project(camera);
+                        const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                        const y = (vector.y * -0.5 + 0.5) * window.innerHeight;
+
+                        // Occlusion check
+                        const dir = o.pos.clone().sub(camera.position).normalize();
+                        raycaster.set(camera.position, dir);
+                        const hits = raycaster.intersectObjects([currentModel], true);
+                        const distToO = camera.position.distanceTo(o.pos);
+                        const isVisible = !(hits.length > 0 && hits[0].distance < distToO - 0.1);
+
+                        overlayData[o.id] = { x, y, visible: isVisible };
+                    });
+                    if (Object.keys(overlayData).length > 0) {
+                        dispatchFlutterMessage('onOverlaysUpdated', overlayData);
+                    }
                 }
             }
             renderer.render(scene, camera);

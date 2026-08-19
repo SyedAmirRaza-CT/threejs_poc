@@ -140,9 +140,16 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
               Expanded(
                 child: ThreeDViewer(
                   autoCenter: true,
-                   // debugConfig: ThreeDDebugConfig(
-                   //   showInteractiveParts: true
-                   // ),
+                  // debugConfig: ThreeDDebugConfig(
+                  //   showInteractiveParts: true
+                  // ),
+                  overlays: [
+                    ThreeDOverlay(
+                      id: 'blinking_dot',
+                      position: [0,0, -0.1], // Center-top of model
+                      child: _BlinkingDot(),
+                    ),
+                  ],
                   initialTargetPosition: widget.initialTargetPosition,
                   initialCameraPosition: widget.initialCameraPosition,
                   hotspots: widget.hotspots,
@@ -331,6 +338,53 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _BlinkingDot extends StatefulWidget {
+  @override
+  State<_BlinkingDot> createState() => _BlinkingDotState();
+}
+
+class _BlinkingDotState extends State<_BlinkingDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _controller,
+      child: Container(
+        width: 12,
+        height: 12,
+        decoration: const BoxDecoration(
+          color: Colors.red,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.redAccent,
+              blurRadius: 10,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
       ),
     );
   }
