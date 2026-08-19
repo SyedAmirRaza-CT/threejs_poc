@@ -603,7 +603,7 @@
                             if (autoCenter === true || autoCenter === 'true') {
                                 oPos.sub(modelOffset);
                             }
-                            flutterOverlays.push({ id: o.id, pos: oPos });
+                            flutterOverlays.push({ id: o.id, pos: oPos, occlude: o.occlude });
                         });
                     }
 
@@ -655,7 +655,8 @@
                         raycaster.set(camera.position, dir);
                         const hits = raycaster.intersectObjects([currentModel], true);
                         const distToHS = camera.position.distanceTo(hs.pos);
-                        const isVisible = config_showHotspots && !(hits.length > 0 && hits[0].distance < distToHS - 0.1);
+                        // Fixed: Check vector.z to ensure it's in front of camera
+                        const isVisible = vector.z <= 1 && config_showHotspots && !(hits.length > 0 && hits[0].distance < distToHS - 0.1);
                         hs.element.style.opacity = isVisible ? '1' : '0';
                         hs.element.style.pointerEvents = isVisible ? 'auto' : 'none';
                         hs.element.style.display = isVisible ? 'block' : 'none';
@@ -668,12 +669,18 @@
                         const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
                         const y = (vector.y * -0.5 + 0.5) * window.innerHeight;
 
-                        // Occlusion check
-                        const dir = o.pos.clone().sub(camera.position).normalize();
-                        raycaster.set(camera.position, dir);
-                        const hits = raycaster.intersectObjects([currentModel], true);
-                        const distToO = camera.position.distanceTo(o.pos);
-                        const isVisible = !(hits.length > 0 && hits[0].distance < distToO - 0.1);
+                        let isVisible = vector.z <= 1; // Basic frustum check
+
+                        // Occlusion check only if enabled
+                        if (isVisible && o.occlude !== false) {
+                            const dir = o.pos.clone().sub(camera.position).normalize();
+                            raycaster.set(camera.position, dir);
+                            const hits = raycaster.intersectObjects([currentModel], true);
+                            const distToO = camera.position.distanceTo(o.pos);
+
+                            // Use a small epsilon to avoid self-occlusion from the surface
+                            isVisible = !(hits.length > 0 && hits[0].distance < distToO - 0.05);
+                        }
 
                         overlayData[o.id] = { x, y, visible: isVisible };
                     });

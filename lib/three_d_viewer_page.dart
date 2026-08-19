@@ -148,6 +148,7 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                       id: 'blinking_dot',
                       position: [0,0, -0.1], // Center-top of model
                       child: _BlinkingDot(),
+                      enableOcclusion: false
                     ),
                   ],
                   initialTargetPosition: widget.initialTargetPosition,

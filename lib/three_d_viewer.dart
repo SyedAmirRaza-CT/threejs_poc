@@ -96,16 +96,19 @@ class ThreeDOverlay {
   final String id;
   final List<double> position;
   final Widget child;
+  final bool enableOcclusion;
 
   const ThreeDOverlay({
     required this.id,
     required this.position,
     required this.child,
+    this.enableOcclusion = true,
   });
 
   Map<String, dynamic> toMap() => {
         'id': id,
         'pos': position,
+        'occlude': enableOcclusion,
       };
 }
 
