@@ -345,6 +345,14 @@
                     }
                 };
                 window.toggleAnimation = (p) => { if (mixer) for (let k in actions) actions[k].paused = !p; };
+                window.playAnimation = (n, loop) => {
+                    if (actions[n]) {
+                        actions[n].reset();
+                        actions[n].setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce);
+                        actions[n].clampWhenFinished = true;
+                        actions[n].play();
+                    }
+                };
                 window.setAnimationProgress = (n, p) => { if (actions[n]) { actions[n].paused = true; actions[n].time = actions[n].getClip().duration * p; mixer.update(0); } };
                 window.setAutoRotate = (e, s) => { if (controls) { controls.autoRotate = e; if (s) controls.autoRotateSpeed = s; } };
                 window.setMaterialColor = (n, h) => { if (currentModel) currentModel.traverse(o => { if (o.isMesh && (o.name === n || n === "all")) o.material.color.set(h); }); };
@@ -399,6 +407,8 @@
                             loadModel(...data.args);
                         } else if (data.action === 'toggleAnimation') {
                             window.toggleAnimation(data.args[0]);
+                        } else if (data.action === 'playAnimation') {
+                            window.playAnimation(data.args[0], data.args[1]);
                         } else if (data.action === 'setAnimationProgress') {
                             window.setAnimationProgress(data.args[0], data.args[1]);
                         } else if (data.action === 'setAutoRotate') {

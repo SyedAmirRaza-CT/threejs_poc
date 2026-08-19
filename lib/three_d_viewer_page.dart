@@ -293,37 +293,61 @@ class _ThreeDViewerPageState extends State<ThreeDViewerPage> {
                                       ),
                                     ),
                                     const SizedBox(height: 4),
-                                    SliderTheme(
-                                      data: SliderTheme.of(context).copyWith(
-                                        trackHeight: 4,
-                                        thumbShape: const RoundSliderThumbShape(
-                                          enabledThumbRadius: 8,
-                                        ),
-                                        overlayShape:
-                                            const RoundSliderOverlayShape(
-                                              overlayRadius: 16,
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: SliderTheme(
+                                            data:
+                                                SliderTheme.of(context).copyWith(
+                                                  trackHeight: 4,
+                                                  thumbShape:
+                                                      const RoundSliderThumbShape(
+                                                        enabledThumbRadius: 8,
+                                                      ),
+                                                  overlayShape:
+                                                      const RoundSliderOverlayShape(
+                                                        overlayRadius: 16,
+                                                      ),
+                                                  activeTrackColor: Colors.blue,
+                                                  inactiveTrackColor: Colors.blue
+                                                      .withValues(alpha: 0.1),
+                                                  thumbColor: Colors.blue,
+                                                ),
+                                            child: Slider(
+                                              value:
+                                                  _animationProgress[
+                                                    anim.name
+                                                  ] ??
+                                                  0.0,
+                                              onChanged: (value) {
+                                                setState(() {
+                                                  _animationProgress[
+                                                    anim.name
+                                                  ] = value;
+                                                  _isPlaying = false;
+                                                });
+                                                _controller
+                                                    .setAnimationProgress(
+                                                      anim.name,
+                                                      value,
+                                                    );
+                                              },
                                             ),
-                                        activeTrackColor: Colors.blue,
-                                        inactiveTrackColor: Colors.blue
-                                            .withValues(alpha: 0.1),
-                                        thumbColor: Colors.blue,
-                                      ),
-                                      child: Slider(
-                                        value:
-                                            _animationProgress[anim.name] ??
-                                            0.0,
-                                        onChanged: (value) {
-                                          setState(() {
-                                            _animationProgress[anim.name] =
-                                                value;
-                                            _isPlaying = false;
-                                          });
-                                          _controller.setAnimationProgress(
-                                            anim.name,
-                                            value,
-                                          );
-                                        },
-                                      ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.play_circle_outline,
+                                            size: 20,
+                                            color: Colors.blue,
+                                          ),
+                                          onPressed:
+                                              () => _controller.playAnimation(
+                                                anim.name,
+                                              ),
+                                          tooltip: "Play Once",
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),

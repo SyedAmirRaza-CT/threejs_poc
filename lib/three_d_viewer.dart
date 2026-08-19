@@ -118,10 +118,16 @@ class ThreeDEnvironmentConfig {
 class ThreeDViewerController {
   _ThreeDViewerState? _state;
   void toggleAnimation(bool play) => _state?._toggleAnimation(play);
-  void setAnimationProgress(String name, double progress) => _state?._setAnimationProgress(name, progress);
-  void setAutoRotate(bool enable, {double speed = 2.0, bool clockwise = true}) => _state?._setAutoRotate(enable, speed: speed, clockwise: clockwise);
-  void goToView(double h, double v, double d, {double durationMillis = 1000}) => _state?._goToView(h, v, d, durationMillis);
-  void setMaterialColor(String meshName, Color color) => _state?._setMaterialColor(meshName, color);
+  void playAnimation(String name, {bool loop = false}) =>
+      _state?._playAnimation(name, loop: loop);
+  void setAnimationProgress(String name, double progress) =>
+      _state?._setAnimationProgress(name, progress);
+  void setAutoRotate(bool enable, {double speed = 2.0, bool clockwise = true}) =>
+      _state?._setAutoRotate(enable, speed: speed, clockwise: clockwise);
+  void goToView(double h, double v, double d, {double durationMillis = 1000}) =>
+      _state?._goToView(h, v, d, durationMillis);
+  void setMaterialColor(String meshName, Color color) =>
+      _state?._setMaterialColor(meshName, color);
   void launchAR() => _state?._launchAR();
   void reset() => _state?._reset();
 }
@@ -209,6 +215,9 @@ class _ThreeDViewerState extends State<ThreeDViewer> {
   }
 
   void _toggleAnimation(bool play) => webViewController?.evaluateJavascript(source: "window.toggleAnimation($play);");
+  void _playAnimation(String name, {bool loop = false}) =>
+      webViewController?.evaluateJavascript(
+          source: "window.playAnimation('$name', $loop);");
   void _setAnimationProgress(String name, double p) => webViewController?.evaluateJavascript(source: "window.setAnimationProgress('$name', $p);");
   void _setAutoRotate(bool enable, {double speed = 2.0, bool clockwise = true}) {
     double finalSpeed = clockwise ? speed : -speed;
